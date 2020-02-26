@@ -268,8 +268,6 @@ class EfficientDet(nn.Module):
             batch_size = scores.size(0)
             for i in range(batch_size):
 
-                # scores_over_thresh = (scores > 0.05)[i, :, 0]
-
                 if scores_over_thresh[i, :].sum() == 0:
                     output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 4)])
                     continue

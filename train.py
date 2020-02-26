@@ -35,9 +35,9 @@ def train(opt):
                                transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
     training_generator = DataLoader(training_set, **training_params)
 
-    # test_set = MyDataset(root_dir=opt.data_path, mode="validation",
-    #                        transform=transforms.Compose([Normalizer(), Resizer()]))
-    # test_generator = DataLoader(test_set, **test_params)
+    test_set = MyDataset(root_dir=opt.data_path, mode="validation",
+                           transform=transforms.Compose([Normalizer(), Resizer()]))
+    test_generator = DataLoader(test_set, **test_params)
 
     opt.num_classes = training_set.num_classes
 

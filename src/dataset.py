@@ -165,8 +165,8 @@ class Augmenter(object):
 class Normalizer(object):
 
     def __init__(self):
-        self.mean = np.array([[[0.485, 0.456, 0.406]]])
-        self.std = np.array([[[0.229, 0.224, 0.225]]])
+        self.mean = np.array([[[0.64364545, 0.60998588, 0.60550367]]])
+        self.std = np.array([[[0.22700769, 0.23887326, 0.23833767]]])
 
     def __call__(self, sample):
         image, annots = sample['img'], sample['annot']
