@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-
 class BBoxTransform(nn.Module):
 
     def __init__(self, mean=None, std=None):

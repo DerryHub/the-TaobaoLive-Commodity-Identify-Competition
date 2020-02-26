@@ -6,7 +6,6 @@ import json
 from torch.utils.data import Dataset, DataLoader
 import cv2
 
-
 class MyDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', transform=None):
         assert mode in ['train', 'validation']
