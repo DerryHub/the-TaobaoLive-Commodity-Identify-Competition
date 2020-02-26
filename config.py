@@ -4,7 +4,7 @@ def get_args():
     parser = argparse.ArgumentParser(
         "EfficientDet: Scalable and Efficient Object Detection implementation by Signatrix GmbH")
     parser.add_argument("--image_size", type=int, default=512, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=20, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=8, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
