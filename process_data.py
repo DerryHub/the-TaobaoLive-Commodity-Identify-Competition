@@ -4,7 +4,7 @@ from shutil import copyfile, rmtree
 from tqdm import tqdm
 import cv2
 
-def processImage(img_tat, root, annotation):
+def processImage(img_tat, root, annotation, label):
     img_ann_path = os.path.join(root, 'image_annotation/')
     img_path = os.path.join(root, 'image/')
     dirList = os.listdir(img_ann_path)
@@ -22,14 +22,16 @@ def processImage(img_tat, root, annotation):
             d['img_name'] = new_name
             d['annotations'] = dic['annotations']
             for i, ann in enumerate(d['annotations']):
-                if ann['label'] not in annotation['label2index'].keys():
-                    annotation['label2index'][ann['label']] = len(annotation['label2index'])
-                    annotation['index2label'][len(annotation['index2label'])] = ann['label']
-                d['annotations'][i]['label'] = annotation['label2index'][ann['label']]
+                if ann['label'] == '古装':
+                    ann['label'] = '古风'
+                if ann['label'] not in label['label2index'].keys():
+                    label['label2index'][ann['label']] = len(label['label2index'])
+                    label['index2label'][len(label['index2label'])] = ann['label']
+                d['annotations'][i]['label'] = label['label2index'][ann['label']]
             annotation['annotations'].append(d)
-    return annotation
+    return annotation, label
 
-def processVideo(vdo_tat, root, annotation):
+def processVideo(vdo_tat, root, annotation, label):
     vdo_ann_path = os.path.join(root, 'video_annotation/')
     vdo_path = os.path.join(root, 'video/')
     jsonList = os.listdir(vdo_ann_path)
@@ -43,10 +45,12 @@ def processVideo(vdo_tat, root, annotation):
         annotation_dic = {}
         for d in dic['frames']:
             for i, ann in enumerate(d['annotations']):
-                if ann['label'] not in annotation['label2index'].keys():
-                    annotation['label2index'][ann['label']] = len(annotation['label2index'])
-                    annotation['index2label'][len(annotation['index2label'])] = ann['label']
-                d['annotations'][i]['label'] = annotation['label2index'][ann['label']]
+                if ann['label'] == '古装':
+                    ann['label'] = '古风'
+                if ann['label'] not in label['label2index'].keys():
+                    label['label2index'][ann['label']] = len(label['label2index'])
+                    label['index2label'][len(label['index2label'])] = ann['label']
+                d['annotations'][i]['label'] = label['label2index'][ann['label']]
             annotation_dic[d['frame_index']] = d['annotations']
         vdo_name = dic['video_id']+'.mp4'
         cap = cv2.VideoCapture(os.path.join(vdo_path, vdo_name))
@@ -60,12 +64,14 @@ def processVideo(vdo_tat, root, annotation):
                 d['annotations'] = annotation_dic[i]
                 cv2.imwrite(os.path.join(vdo_tat, img_name), frame)
                 annotation['annotations'].append(d)
-    return annotation
+    return annotation, label
 
 def processTrain():
     roots = [1, 2, 3, 4, 5, 6]
     img_tat = 'data/train_images'
-    vdo_tat = 'data/train_videos' 
+    vdo_tat = 'data/train_videos'
+
+    label_file = 'data/label.json'
 
     if os.path.isdir(img_tat):
         rmtree(img_tat)
@@ -75,27 +81,30 @@ def processTrain():
         rmtree(vdo_tat)
     os.makedirs(vdo_tat)
 
+    label = {}
+    label['label2index'] = {}
+    label['index2label'] = {}
+
     annotation_image = {}
-    annotation_image['label2index'] = {}
-    annotation_image['index2label'] = {}
     annotation_image['annotations'] = []
 
     annotation_video = {}
-    annotation_video['label2index'] = {}
-    annotation_video['index2label'] = {}
     annotation_video['annotations'] = []
     
     for i in roots:
         root = 'data/train_dataset_part{}'.format(i)
         print('processing train data [{}/{}]:'.format(i, len(roots)))
-        annotation_image = processImage(img_tat, root, annotation_image)
-        annotation_video = processVideo(vdo_tat, root, annotation_video)
+        annotation_image, label = processImage(img_tat, root, annotation_image, label)
+        annotation_video, label = processVideo(vdo_tat, root, annotation_video, label)
 
     with open(img_tat+'_annotation.json', 'w') as f:
         json.dump(annotation_image, f)
     
     with open(vdo_tat+'_annotation.json', 'w') as f:
         json.dump(annotation_video, f)
+    
+    with open(label_file, 'w') as f:
+        json.dump(label, f)
 
 def processValidation():
     roots = [1, 2]
@@ -110,21 +119,21 @@ def processValidation():
         rmtree(vdo_tat)
     os.makedirs(vdo_tat)
 
+    label = {}
+    label['label2index'] = {}
+    label['index2label'] = {}
+
     annotation_image = {}
-    annotation_image['label2index'] = {}
-    annotation_image['index2label'] = {}
     annotation_image['annotations'] = []
 
     annotation_video = {}
-    annotation_video['label2index'] = {}
-    annotation_video['index2label'] = {}
     annotation_video['annotations'] = []
     
     for i in roots:
         root = 'data/validation_dataset_part{}'.format(i)
         print('processing validation data [{}/{}]:'.format(i, len(roots)))
-        annotation_image = processImage(img_tat, root, annotation_image)
-        annotation_video = processVideo(vdo_tat, root, annotation_video)
+        annotation_image, label = processImage(img_tat, root, annotation_image, label)
+        annotation_video, label = processVideo(vdo_tat, root, annotation_video, label)
     
     with open(img_tat+'_annotation.json', 'w') as f:
         json.dump(annotation_image, f)
