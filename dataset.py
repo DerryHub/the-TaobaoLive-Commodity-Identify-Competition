@@ -164,8 +164,10 @@ class ArcfaceDataset(Dataset):
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
-        # transform = transforms.Normalize([], [])
-        
+        transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+        img = transform(img)
 
         return {'img':img, 'label':label}
         
@@ -173,7 +175,7 @@ class ArcfaceDataset(Dataset):
 
 if __name__ == "__main__":
     dataset = ArcfaceDataset()
-    # print(dataset[0])
+    print(dataset[0])
     # mean = np.zeros(3)
     # std = np.zeros(3)
     # for d in tqdm(dataset):
