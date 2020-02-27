@@ -32,7 +32,7 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--image_size", type=int, default=128, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=100, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=64, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
