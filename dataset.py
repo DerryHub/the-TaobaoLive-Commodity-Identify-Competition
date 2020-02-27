@@ -159,7 +159,7 @@ class ArcfaceDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, index):
-        img, label = [self.items[index]]
+        img, label = self.items[index]
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
