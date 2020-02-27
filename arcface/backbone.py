@@ -98,8 +98,13 @@ def get_blocks(num_layers):
     return blocks
 
 class Backbone(Module):
-    def __init__(self, num_layers, drop_ratio, mode='ir'):
+    def __init__(self, config):
         super(Backbone, self).__init__()
+        num_layers = config.num_layers
+        drop_ratio = config.drop_ratio
+        mode = config.mode
+        embedding_size = config.embedding_size
+
         assert num_layers in [50, 100, 152], 'num_layers should be 50,100, or 152'
         assert mode in ['ir', 'ir_se'], 'mode should be ir or ir_se'
         blocks = get_blocks(num_layers)
@@ -113,8 +118,8 @@ class Backbone(Module):
         self.output_layer = Sequential(BatchNorm2d(512), 
                                        Dropout(drop_ratio),
                                        Flatten(),
-                                       Linear(512 * 8 * 8, 512),
-                                       BatchNorm1d(512))
+                                       Linear(512 * 8 * 8, embedding_size),
+                                       BatchNorm1d(embedding_size))
         modules = []
         for block in blocks:
             for bottleneck in block:
@@ -129,10 +134,3 @@ class Backbone(Module):
         x = self.body(x)
         x = self.output_layer(x)
         return l2_norm(x)
-
-
-if __name__ == "__main__":
-    backbone = Backbone(50, 0.2)
-    a = torch.randn([5, 3, 128, 128])
-    b = backbone(a)
-    print(b.size())

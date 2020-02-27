@@ -4,11 +4,12 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from efficientdet.dataset import MyDataset, Resizer, Normalizer, Augmenter, collater
+from dataset import EfficientdetDataset
+from utils import Resizer, Normalizer, Augmenter, collater
 from efficientdet.efficientdet import EfficientDet
 import numpy as np
 from tqdm import tqdm
-from config import get_args
+from config import get_args_efficientdet
 
 def train(opt):
     num_gpus = 1
@@ -31,11 +32,11 @@ def train(opt):
                    "collate_fn": collater,
                    "num_workers": 0}
 
-    training_set = MyDataset(root_dir=opt.data_path, mode="train",
+    training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
                                transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
     training_generator = DataLoader(training_set, **training_params)
 
-    test_set = MyDataset(root_dir=opt.data_path, mode="validation",
+    test_set = EfficientdetDataset(root_dir=opt.data_path, mode="validation",
                            transform=transforms.Compose([Normalizer(), Resizer()]))
     test_generator = DataLoader(test_set, **test_params)
 
@@ -68,10 +69,7 @@ def train(opt):
         for iter, data in enumerate(progress_bar):
             # try:
             optimizer.zero_grad()
-            if torch.cuda.is_available():
-                cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
-            else:
-                cls_loss, reg_loss = model([data['img'].float(), data['annot']])
+            cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
 
             cls_loss = cls_loss.mean()
             reg_loss = reg_loss.mean()
@@ -103,10 +101,7 @@ def train(opt):
             progress_bar.set_description_str(' Evaluating')
             for iter, data in enumerate(progress_bar):
                 with torch.no_grad():
-                    if torch.cuda.is_available():
-                        cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
-                    else:
-                        cls_loss, reg_loss = model([data['img'].float(), data['annot']])
+                    cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
 
                     cls_loss = cls_loss.mean()
                     reg_loss = reg_loss.mean()
@@ -135,5 +130,5 @@ def train(opt):
 
 
 if __name__ == "__main__":
-    opt = get_args()
+    opt = get_args_efficientdet()
     train(opt)

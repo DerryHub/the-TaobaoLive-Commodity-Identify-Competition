@@ -4,9 +4,10 @@ import numpy as np
 from tqdm import tqdm
 import json
 from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms as transforms
 import cv2
 
-class MyDataset(Dataset):
+class EfficientdetDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', transform=None):
         assert mode in ['train', 'validation']
 
@@ -15,6 +16,7 @@ class MyDataset(Dataset):
 
         img_tat = mode + '_images'
         vdo_tat = mode + '_videos'
+
         with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
             d_i = json.load(f)
         with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
@@ -86,96 +88,86 @@ class MyDataset(Dataset):
     def index2label(self, index):
         return self.labelDic['index2label'][index]
 
+    def getImagePath(self, index):
+        imgPath, annotationsList = self.images[index]
+        return imgPath
 
 
-def collater(data):
-    imgs = [s['img'] for s in data]
-    annots = [s['annot'] for s in data]
-    scales = [s['scale'] for s in data]
+class ArcfaceDataset(Dataset):
+    def __init__(self, root_dir='data', mode='train', size=(128, 128), flip_x=0.5):
+        assert mode in ['train', 'validation']
 
-    imgs = torch.from_numpy(np.stack(imgs, axis=0))
+        self.root_dir = root_dir
+        self.size = size
+        self.flip_x = flip_x
 
-    max_num_annots = max(annot.shape[0] for annot in annots)
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
 
-    if max_num_annots > 0:
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
 
-        annot_padded = torch.ones((len(annots), max_num_annots, 5)) * -1
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
 
-        if max_num_annots > 0:
-            for idx, annot in enumerate(annots):
-                if annot.shape[0] > 0:
-                    annot_padded[idx, :annot.shape[0], :] = annot
-    else:
-        annot_padded = torch.ones((len(annots), 1, 5)) * -1
+        self.images = []
 
-    imgs = imgs.permute(0, 3, 1, 2)
+        id_set = set([])
 
-    return {'img': imgs, 'annot': annot_padded, 'scale': scales}
+        self.clsDic = {}
+        
+        for d in tqdm(l_i):
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    t = []
+                    t.append(os.path.join(img_tat, d['img_name']))
+                    t.append(dd['box'])
+                    t.append(dd['instance_id'])
+                    self.images.append(t)
+                    id_set.add(dd['instance_id'])
 
+        for d in tqdm(l_v):
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    t = []
+                    t.append(os.path.join(vdo_tat, d['img_name']))
+                    t.append(dd['box'])
+                    t.append(dd['instance_id'])
+                    self.images.append(t)
+                    id_set.add(dd['instance_id'])
 
-class Resizer(object):
-    """Convert ndarrays in sample to Tensors."""
+        for i in id_set:
+            self.clsDic[i] = len(self.clsDic)
 
-    def __call__(self, sample, common_size=512):
-        image, annots = sample['img'], sample['annot']
-        height, width, _ = image.shape
-        if height > width:
-            scale = common_size / height
-            resized_height = common_size
-            resized_width = int(width * scale)
-        else:
-            scale = common_size / width
-            resized_height = int(height * scale)
-            resized_width = common_size
+        self.num_classes = len(self.clsDic)
 
-        image = cv2.resize(image, (resized_width, resized_height))
+    def __len__(self):
+        return len(self.images)
 
-        new_image = np.zeros((common_size, common_size, 3))
-        new_image[0:resized_height, 0:resized_width] = image
+    def __getitem__(self, index):
+        imgPath, box, instance_id = self.images[index]
+        img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        img = img[box[1]:box[3], box[0]:box[2], :]
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
 
-        annots[:, :4] *= scale
+        img = cv2.resize(img, self.size)
+        if np.random.rand() < self.flip_x:
+            img = img[:, ::-1, :].copy()
+        img = torch.from_numpy(img)
+        img = img.permute(2, 0, 1)
+        # transform = transforms.Normalize([], [])
+        label = torch.tensor(self.clsDic[instance_id])
 
-        return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots), 'scale': scale}
-
-
-class Augmenter(object):
-    """Convert ndarrays in sample to Tensors."""
-
-    def __call__(self, sample, flip_x=0.5):
-        if np.random.rand() < flip_x:
-            image, annots = sample['img'], sample['annot']
-            image = image[:, ::-1, :]
-
-            rows, cols, channels = image.shape
-
-            x1 = annots[:, 0].copy()
-            x2 = annots[:, 2].copy()
-
-            x_tmp = x1.copy()
-
-            annots[:, 0] = cols - x2
-            annots[:, 2] = cols - x_tmp
-
-            sample = {'img': image, 'annot': annots}
-
-        return sample
-
-
-class Normalizer(object):
-
-    def __init__(self):
-        self.mean = np.array([[[0.64364545, 0.60998588, 0.60550367]]])
-        self.std = np.array([[[0.22700769, 0.23887326, 0.23833767]]])
-
-    def __call__(self, sample):
-        image, annots = sample['img'], sample['annot']
-
-        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots}
+        return {'img':img, 'label':label}
+        
+        
 
 if __name__ == "__main__":
-    from torchvision import transforms
-    dataset = MyDataset()
-    print(len(dataset))
+    dataset = ArcfaceDataset()
+    # print(dataset[0])
     # mean = np.zeros(3)
     # std = np.zeros(3)
     # for d in tqdm(dataset):

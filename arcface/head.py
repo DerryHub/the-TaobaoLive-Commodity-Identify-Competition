@@ -5,10 +5,15 @@ from arcface.utils import l2_norm
 
 class Arcface(Module):
     # implementation of additive margin softmax loss in https://arxiv.org/abs/1801.05599    
-    def __init__(self, embedding_size=512, classnum=51332,  s=64., m=0.5):
+    def __init__(self, config):
         super(Arcface, self).__init__()
-        self.classnum = classnum
-        self.kernel = Parameter(torch.Tensor(embedding_size,classnum))
+        embedding_size = config.embedding_size
+        num_classes = config.num_classes
+        s=64.
+        m=0.5
+
+        self.num_classes = num_classes
+        self.kernel = Parameter(torch.Tensor(embedding_size,num_classes))
         # initial kernel
         self.kernel.data.uniform_(-1, 1).renorm_(2,1,1e-5).mul_(1e5)
         self.m = m # the margin value, default is 0.5
