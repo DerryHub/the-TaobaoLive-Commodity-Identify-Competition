@@ -23,7 +23,7 @@ def train(opt):
     training_params = {"batch_size": opt.batch_size * num_gpus,
                         "shuffle": True,
                         "drop_last": False,
-                        "num_workers": 8}
+                        "num_workers": opt.workers}
 
     training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train")
     training_generator = DataLoader(training_set, **training_params)
@@ -58,6 +58,8 @@ def train(opt):
 
     cost = nn.CrossEntropyLoss()
 
+    best_loss = np.inf
+
     num_iter_per_epoch = len(training_generator)
     for epoch in range(opt.num_epochs):
         print('Epoch: {}/{}:'.format(epoch + 1, opt.num_epochs))
@@ -91,6 +93,12 @@ def train(opt):
             progress_bar.write('Batch loss: {:.5f}\tTotal loss: {:.5f}\tAccuracy: {:.5f}'.format(loss, total_loss, acc/total))
 
         scheduler.step(np.mean(epoch_loss))
+
+        if total_loss < best_loss:
+            print('Saving models...')
+            best_loss = total_loss
+            torch.save(backbone.module.state_dict(), os.path.join(opt.saved_path, b_name+'.pth'))
+            torch.save(head.module.state_dict(), os.path.join(opt.saved_path, h_name+'.pth'))
 
 if __name__ == "__main__":
     opt = get_args_arcface()

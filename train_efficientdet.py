@@ -24,13 +24,13 @@ def train(opt):
                        "shuffle": True,
                        "drop_last": True,
                        "collate_fn": collater,
-                       "num_workers": 0}
+                       "num_workers": opt.workers}
 
     test_params = {"batch_size": opt.batch_size * num_gpus,
                    "shuffle": False,
                    "drop_last": False,
                    "collate_fn": collater,
-                   "num_workers": 0}
+                   "num_workers": opt.workers}
 
     training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
                                transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
