@@ -117,8 +117,8 @@ class ArcfaceDataset(Dataset):
         id_set = set([])
 
         self.clsDic = {}
-        
-        for d in tqdm(l_i):
+
+        for d in l_i:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
                     t = []
@@ -128,7 +128,7 @@ class ArcfaceDataset(Dataset):
                     self.images.append(t)
                     id_set.add(dd['instance_id'])
 
-        for d in tqdm(l_v):
+        for d in l_v:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
                     t = []
@@ -143,23 +143,29 @@ class ArcfaceDataset(Dataset):
 
         self.num_classes = len(self.clsDic)
 
+        self.items = []
+        img_t = tqdm(self.images)
+        img_t.set_description_str('Loading Data')
+        for imgPath, box, instance_id in img_t:
+            img = cv2.imread(os.path.join(self.root_dir, imgPath))
+            img = img[box[1]:box[3], box[0]:box[2], :]
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img.astype(np.float32) / 255
+            img = cv2.resize(img, self.size)
+            label = torch.tensor(self.clsDic[instance_id])
+            self.items.append([img, label])
+
     def __len__(self):
-        return len(self.images)
+        return len(self.items)
 
     def __getitem__(self, index):
-        imgPath, box, instance_id = self.images[index]
-        img = cv2.imread(os.path.join(self.root_dir, imgPath))
-        img = img[box[1]:box[3], box[0]:box[2], :]
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img.astype(np.float32) / 255
-
-        img = cv2.resize(img, self.size)
+        img, label = [self.items[index]]
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
         # transform = transforms.Normalize([], [])
-        label = torch.tensor(self.clsDic[instance_id])
+        
 
         return {'img':img, 'label':label}
         
