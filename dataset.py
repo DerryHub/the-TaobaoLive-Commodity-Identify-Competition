@@ -17,22 +17,16 @@ class EfficientdetDataset(Dataset):
         img_tat = mode + '_images'
         vdo_tat = mode + '_videos'
 
+        label_file = 'label.json'
+
         with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
             d_i = json.load(f)
         with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
             d_v = json.load(f)
+        with open(os.path.join(root_dir, label_file), 'r') as f:
+            self.labelDic = json.load(f)
 
-        labels = set(d_i['label2index'].keys()) | set(d_v['label2index'].keys())
-
-        self.num_classes = len(labels)
-
-        self.labelDic = {}
-        self.labelDic['label2index'] = {}
-        self.labelDic['index2label'] = {}
-
-        for label in labels:
-            self.labelDic['label2index'][label] = len(self.labelDic['label2index'])
-            self.labelDic['index2label'][len(self.labelDic['index2label'])] = label
+        self.num_classes = len(self.labelDic['label2index'])
 
         l_i = d_i['annotations']
         l_v = d_v['annotations']
@@ -44,9 +38,6 @@ class EfficientdetDataset(Dataset):
                 continue
             t = []
             t.append(os.path.join(img_tat, d['img_name']))
-            for i in range(len(d['annotations'])):
-                index = d['annotations'][i]['label']
-                d['annotations'][i]['label'] = self.labelDic['label2index'][d_i['index2label'][str(index)]]
             t.append(d['annotations'])
             self.images.append(t)
             
@@ -55,9 +46,6 @@ class EfficientdetDataset(Dataset):
                 continue
             t = []
             t.append(os.path.join(vdo_tat, d['img_name']))
-            for i in range(len(d['annotations'])):
-                index = d['annotations'][i]['label']
-                d['annotations'][i]['label'] = self.labelDic['label2index'][d_v['index2label'][str(index)]]
             t.append(d['annotations'])
             self.images.append(t)
 
@@ -67,6 +55,7 @@ class EfficientdetDataset(Dataset):
     def __getitem__(self, index):
         imgPath, annotationsList = self.images[index]
         img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        print(os.path.join(self.root_dir, imgPath))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
 
@@ -143,23 +132,18 @@ class ArcfaceDataset(Dataset):
 
         self.num_classes = len(self.clsDic)
 
-        self.items = []
-        img_t = tqdm(self.images)
-        img_t.set_description_str('Loading Data')
-        for imgPath, box, instance_id in img_t:
-            img = cv2.imread(os.path.join(self.root_dir, imgPath))
-            img = img[box[1]:box[3], box[0]:box[2], :]
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = img.astype(np.float32) / 255
-            img = cv2.resize(img, self.size)
-            label = torch.tensor(self.clsDic[instance_id])
-            self.items.append([img, label])
-
     def __len__(self):
-        return len(self.items)
+        return len(self.images)
 
     def __getitem__(self, index):
-        img, label = self.items[index]
+        imgPath, box, instance_id = self.images[index]
+        img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        img = img[box[1]:box[3], box[0]:box[2], :]
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
+        img = cv2.resize(img, self.size)
+        label = torch.tensor(self.clsDic[instance_id])
+        self.items.append([img, label])
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
