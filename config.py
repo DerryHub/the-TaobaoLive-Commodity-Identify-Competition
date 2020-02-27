@@ -26,7 +26,7 @@ def get_args_efficientdet():
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
-    parser.add_argument("--workers", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args()
     return args
 
@@ -44,7 +44,7 @@ def get_args_arcface():
     parser.add_argument("--mode", type=str, default='ir', help="[ir, ir_se]")
     parser.add_argument("--embedding_size", type=int, default=512)
     parser.add_argument('--resume', type=bool, default=False)
-    parser.add_argument("--workers", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=2)
     
     args = parser.parse_args()
     return args

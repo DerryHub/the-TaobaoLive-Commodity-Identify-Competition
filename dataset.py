@@ -33,6 +33,7 @@ class EfficientdetDataset(Dataset):
 
         self.images = []
         
+        print('Loading data...')
         for d in tqdm(l_i):
             if len(d['annotations']) == 0:
                 continue
@@ -48,6 +49,7 @@ class EfficientdetDataset(Dataset):
             t.append(os.path.join(vdo_tat, d['img_name']))
             t.append(d['annotations'])
             self.images.append(t)
+        print('Done')
 
     def __len__(self):
         return len(self.images)
@@ -107,6 +109,7 @@ class ArcfaceDataset(Dataset):
 
         self.clsDic = {}
 
+        print('Loading data...')
         for d in l_i:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
@@ -131,6 +134,7 @@ class ArcfaceDataset(Dataset):
             self.clsDic[i] = len(self.clsDic)
 
         self.num_classes = len(self.clsDic)
+        print('Done')
 
     def __len__(self):
         return len(self.images)
@@ -143,7 +147,6 @@ class ArcfaceDataset(Dataset):
         img = img.astype(np.float32) / 255
         img = cv2.resize(img, self.size)
         label = torch.tensor(self.clsDic[instance_id])
-        self.items.append([img, label])
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
