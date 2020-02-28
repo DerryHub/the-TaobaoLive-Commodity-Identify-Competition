@@ -26,7 +26,7 @@ def train(opt):
                        "collate_fn": collater,
                        "num_workers": opt.workers}
 
-    test_params = {"batch_size": opt.batch_size * num_gpus,
+    test_params = {"batch_size": opt.batch_size * num_gpus * 4,
                    "shuffle": False,
                    "drop_last": False,
                    "collate_fn": collater,
