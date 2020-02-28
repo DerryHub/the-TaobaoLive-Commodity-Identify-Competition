@@ -30,7 +30,7 @@ def train(opt):
                    "shuffle": False,
                    "drop_last": False,
                    "collate_fn": collater,
-                   "num_workers": opt.workers}
+                   "num_workers": 0}
 
     training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
                                transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))

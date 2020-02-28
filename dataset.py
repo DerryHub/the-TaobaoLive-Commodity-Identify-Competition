@@ -57,7 +57,6 @@ class EfficientdetDataset(Dataset):
     def __getitem__(self, index):
         imgPath, annotationsList = self.images[index]
         img = cv2.imread(os.path.join(self.root_dir, imgPath))
-        print(os.path.join(self.root_dir, imgPath))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
 
