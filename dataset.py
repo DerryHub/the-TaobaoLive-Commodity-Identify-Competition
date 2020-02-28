@@ -33,8 +33,8 @@ class EfficientdetDataset(Dataset):
 
         self.images = []
         
-        print('Loading data...')
-        for d in tqdm(l_i):
+        print('Loading {} data...'.format(mode))
+        for d in l_i:
             if len(d['annotations']) == 0:
                 continue
             t = []
@@ -42,7 +42,7 @@ class EfficientdetDataset(Dataset):
             t.append(d['annotations'])
             self.images.append(t)
             
-        for d in tqdm(l_v):
+        for d in l_v:
             if len(d['annotations']) == 0:
                 continue
             t = []

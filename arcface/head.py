@@ -1,19 +1,19 @@
-from torch.nn import Module, Parameter
+from torch import nn
 import torch
 import math
 from arcface.utils import l2_norm
 
-class Arcface(Module):
+class Arcface(nn.Module):
     # implementation of additive margin softmax loss in https://arxiv.org/abs/1801.05599    
     def __init__(self, config):
         super(Arcface, self).__init__()
         embedding_size = config.embedding_size
         num_classes = config.num_classes
-        s=64.
-        m=0.5
+        s = config.s
+        m = config.m
 
         self.num_classes = num_classes
-        self.kernel = Parameter(torch.Tensor(embedding_size,num_classes))
+        self.kernel = nn.Parameter(torch.Tensor(embedding_size,num_classes))
         # initial kernel
         self.kernel.data.uniform_(-1, 1).renorm_(2,1,1e-5).mul_(1e5)
         self.m = m # the margin value, default is 0.5
@@ -45,6 +45,22 @@ class Arcface(Module):
         idx_ = torch.arange(0, nB, dtype=torch.long)
         output[idx_, label] = cos_theta_m[idx_, label]
         output *= self.s # scale up in order to make softmax work, first introduced in normface
+        return output
+
+class LinearLayer(nn.Module):
+    def __init__(self, config):
+        super(LinearLayer, self).__init__()
+        embedding_size = config.embedding_size
+        num_classes = config.num_classes
+        self.fc = nn.Sequential(
+            nn.Linear(embedding_size, 4096),
+            nn.BatchNorm1d(4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, num_classes)
+        )
+    
+    def forward(self, embbedings, label):
+        output = self.fc(embbedings)
         return output
 
 if __name__ == "__main__":

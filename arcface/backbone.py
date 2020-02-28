@@ -118,7 +118,7 @@ class Backbone(Module):
         self.output_layer = Sequential(BatchNorm2d(512), 
                                        Dropout(drop_ratio),
                                        Flatten(),
-                                       Linear(512 * 8 * 8, embedding_size),
+                                       Linear(512 * 7 * 7, embedding_size),
                                        BatchNorm1d(embedding_size))
         modules = []
         for block in blocks:

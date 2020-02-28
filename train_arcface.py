@@ -6,7 +6,7 @@ from torch import optim
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 from arcface.backbone import Backbone
-from arcface.head import Arcface
+from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
 import numpy as np
@@ -25,16 +25,25 @@ def train(opt):
                         "drop_last": False,
                         "num_workers": opt.workers}
 
-    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train")
+    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
     training_generator = DataLoader(training_set, **training_params)
 
     opt.num_classes = training_set.num_classes
 
     backbone = Backbone(opt)
-    head = Arcface(opt)
+    if opt.pretrain:
+        head = LinearLayer(opt)
+    else:
+        head = Arcface(opt)
 
     b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
-    h_name = 'arcface'
+    if opt.pretrain:
+        h_name = 'linearlayer'
+    else:
+        h_name = 'arcface'
+
+    print('backbone: {}'.format(b_name))
+    print('head: {}'.format(h_name))
 
     if opt.resume:
         print('Loading model...')
