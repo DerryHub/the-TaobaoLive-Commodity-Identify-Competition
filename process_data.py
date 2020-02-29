@@ -3,6 +3,7 @@ import json
 from shutil import copyfile, rmtree
 from tqdm import tqdm
 import cv2
+import numpy as np
 
 def processImage(img_tat, root, annotation, label):
     img_ann_path = os.path.join(root, 'image_annotation/')
@@ -141,9 +142,117 @@ def processValidation():
     with open(vdo_tat+'_annotation.json', 'w') as f:
         json.dump(annotation_video, f)
 
-if __name__ == "__main__":
-    processTrain()
-    processValidation()
 
+def saveNumpyInstance(root_dir, mode, size):
+    img_tat = mode + '_images'
+    vdo_tat = mode + '_videos'
+    savePath = mode + '_instance'
+    savePath = os.path.join(root_dir, savePath)
+
+    if os.path.isdir(savePath):
+        rmtree(savePath)
+    os.makedirs(savePath)
+
+    with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+        d_i = json.load(f)
+    with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+        d_v = json.load(f)
+
+    l_i = d_i['annotations']
+    l_v = d_v['annotations']
+
+    images = []
+
+    for d in l_i:
+        for dd in d['annotations']:
+            if dd['instance_id'] > 0:
+                t = []
+                t.append(os.path.join(img_tat, d['img_name']))
+                t.append(img_tat+str(dd['instance_id'])+d['img_name'])
+                t.append(dd['box'])
+                t.append(dd['instance_id'])
+                images.append(t)
+
+    for d in l_v:
+        for dd in d['annotations']:
+            if dd['instance_id'] > 0:
+                t = []
+                t.append(os.path.join(vdo_tat, d['img_name']))
+                t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
+                t.append(dd['box'])
+                t.append(dd['instance_id'])
+                images.append(t)
+    
+    for imgPath, saveName, box, instance_id in tqdm(images):
+        img = cv2.imread(os.path.join(root_dir, imgPath))
+        img = img[box[1]:box[3], box[0]:box[2], :]
+        img = cv2.resize(img, size)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
+        np.save(os.path.join(savePath, saveName)[:-4]+'.npy', img)
+
+# def saveNumpyImage(root_dir, mode):
+#     img_tat = mode + '_images'
+#     vdo_tat = mode + '_videos'
+
+#     save_img_tat = mode + '_images_np'
+#     save_vdo_tat = mode + '_videos_np'
+
+#     if os.path.isdir(os.path.join(root_dir, save_img_tat)):
+#         rmtree(os.path.join(root_dir, save_img_tat))
+#     os.makedirs(os.path.join(root_dir, save_img_tat))
+
+#     if os.path.isdir(os.path.join(root_dir, save_vdo_tat)):
+#         rmtree(os.path.join(root_dir, save_vdo_tat))
+#     os.makedirs(os.path.join(root_dir, save_vdo_tat))
+
+#     label_file = 'label.json'
+
+#     with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+#         d_i = json.load(f)
+#     with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+#         d_v = json.load(f)
+#     with open(os.path.join(root_dir, label_file), 'r') as f:
+#         labelDic = json.load(f)
+
+#     num_classes = len(labelDic['label2index'])
+
+#     l_i = d_i['annotations']
+#     l_v = d_v['annotations']
+
+#     images = []
+    
+#     for d in l_i:
+#         if len(d['annotations']) == 0:
+#             continue
+#         t = []
+#         t.append(os.path.join(img_tat, d['img_name']))
+#         t.append(os.path.join(save_img_tat, d['img_name']))
+#         # t.append(d['annotations'])
+#         images.append(t)
+        
+#     for d in l_v:
+#         if len(d['annotations']) == 0:
+#             continue
+#         t = []
+#         t.append(os.path.join(vdo_tat, d['img_name']))
+#         t.append(os.path.join(save_vdo_tat, d['img_name']))
+#         # t.append(d['annotations'])
+#         images.append(t)
+
+#     for imgPath, imgSave in tqdm(images):
+#         img = cv2.imread(os.path.join(root_dir, imgPath))
+#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#         img = img.astype(np.float32) / 255
+#         np.save(os.path.join(root_dir, imgSave)[:-4]+'.npy', img)
+
+
+
+# if __name__ == "__main__":
+    # processTrain()
+    # processValidation()
+    # saveNumpyInstance('data', 'train', (112, 112))
+    # saveNumpyImage('data', 'train')
+    # saveNumpyImage('data', 'validation')
     
 

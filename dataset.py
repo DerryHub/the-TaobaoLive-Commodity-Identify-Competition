@@ -93,6 +93,8 @@ class ArcfaceDataset(Dataset):
 
         img_tat = mode + '_images'
         vdo_tat = mode + '_videos'
+        savePath = mode + '_instance'
+        self.savePath = os.path.join(root_dir, savePath)
 
         with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
             d_i = json.load(f)
@@ -114,6 +116,7 @@ class ArcfaceDataset(Dataset):
                 if dd['instance_id'] > 0:
                     t = []
                     t.append(os.path.join(img_tat, d['img_name']))
+                    t.append(img_tat+str(dd['instance_id'])+d['img_name'])
                     t.append(dd['box'])
                     t.append(dd['instance_id'])
                     self.images.append(t)
@@ -124,6 +127,7 @@ class ArcfaceDataset(Dataset):
                 if dd['instance_id'] > 0:
                     t = []
                     t.append(os.path.join(vdo_tat, d['img_name']))
+                    t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
                     t.append(dd['box'])
                     t.append(dd['instance_id'])
                     self.images.append(t)
@@ -133,19 +137,32 @@ class ArcfaceDataset(Dataset):
             self.clsDic[i] = len(self.clsDic)
 
         self.num_classes = len(self.clsDic)
+
+        # self.items = []
+        # for imgPath, box, instance_id in tqdm(self.images):
+        #     img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        #     img = img[box[1]:box[3], box[0]:box[2], :]
+        #     img = cv2.resize(img, self.size)
+        #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        #     img = img.astype(np.float32) / 255
+        #     label = torch.tensor(self.clsDic[instance_id])
+        #     self.items.append([img, label])
+
         print('Done')
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, index):
-        imgPath, box, instance_id = self.images[index]
-        img = cv2.imread(os.path.join(self.root_dir, imgPath))
-        img = img[box[1]:box[3], box[0]:box[2], :]
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img.astype(np.float32) / 255
-        img = cv2.resize(img, self.size)
+        imgPath, imgName, box, instance_id = self.images[index]
+        img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
+        # img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        # img = img[box[1]:box[3], box[0]:box[2], :]
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = img.astype(np.float32) / 255
+        # img = cv2.resize(img, self.size)
         label = torch.tensor(self.clsDic[instance_id])
+
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
