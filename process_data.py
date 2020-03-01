@@ -67,7 +67,7 @@ def processVideo(vdo_tat, root, annotation, label):
                 annotation['annotations'].append(d)
     return annotation, label
 
-def processTrain():
+def processTrain(label):
     roots = [1, 2, 3, 4, 5, 6]
     img_tat = 'data/train_images'
     vdo_tat = 'data/train_videos'
@@ -81,10 +81,6 @@ def processTrain():
     if os.path.isdir(vdo_tat):
         rmtree(vdo_tat)
     os.makedirs(vdo_tat)
-
-    label = {}
-    label['label2index'] = {}
-    label['index2label'] = {}
 
     annotation_image = {}
     annotation_image['annotations'] = []
@@ -107,7 +103,7 @@ def processTrain():
     with open(label_file, 'w') as f:
         json.dump(label, f)
 
-def processValidation():
+def processValidation(label):
     roots = [1, 2]
     img_tat = 'data/validation_images'
     vdo_tat = 'data/validation_videos' 
@@ -119,10 +115,6 @@ def processValidation():
     if os.path.isdir(vdo_tat):
         rmtree(vdo_tat)
     os.makedirs(vdo_tat)
-
-    label = {}
-    label['label2index'] = {}
-    label['index2label'] = {}
 
     annotation_image = {}
     annotation_image['annotations'] = []
@@ -183,13 +175,67 @@ def saveNumpyInstance(root_dir, mode, size):
                 t.append(dd['instance_id'])
                 images.append(t)
     
-    for imgPath, saveName, box, instance_id in tqdm(images):
-        img = cv2.imread(os.path.join(root_dir, imgPath))
-        img = img[box[1]:box[3], box[0]:box[2], :]
-        img = cv2.resize(img, size)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img.astype(np.float32) / 255
-        np.save(os.path.join(savePath, saveName)[:-4]+'.npy', img)
+    if mode == 'train':
+        for imgPath, saveName, box, instance_id in tqdm(images):
+            img = cv2.imread(os.path.join(root_dir, imgPath))
+            img = img[box[1]:box[3], box[0]:box[2], :]
+            img = cv2.resize(img, size)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img.astype(np.float32) / 255
+            np.save(os.path.join(savePath, saveName)[:-4]+'.npy', img)
+    elif mode == 'validation':
+        for imgPath, saveName, box, instance_id in tqdm(images):
+            if not os.path.exists(os.path.join(savePath, str(instance_id))):
+                os.mkdir(os.path.join(savePath, str(instance_id)))
+            img = cv2.imread(os.path.join(root_dir, imgPath))
+            img = img[box[1]:box[3], box[0]:box[2], :]
+            img = cv2.resize(img, size)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img.astype(np.float32) / 255
+            np.save(os.path.join(savePath, str(instance_id), saveName)[:-4]+'.npy', img)
+
+
+def createInstance2Label(root_dir):
+    items = []
+
+    modes = ['train', 'validation']
+    for mode in modes:
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
+
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
+
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
+
+        for d in l_i:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    t = []
+                    t.append(dd['label'])
+                    t.append(dd['instance_id'])
+                    items.append(t)
+
+        for d in l_v:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    t = []
+                    t.append(dd['label'])
+                    t.append(dd['instance_id'])
+                    items.append(t)
+
+    ins2labDic = {}
+    for label, instance_id in tqdm(items):
+        if instance_id in ins2labDic:
+            continue
+        ins2labDic[instance_id] = label
+
+    with open(os.path.join(root_dir, 'instance2label.json'), 'w') as f:
+        json.dump(ins2labDic, f)
+
 
 # def saveNumpyImage(root_dir, mode):
 #     img_tat = mode + '_images'
@@ -249,10 +295,15 @@ def saveNumpyInstance(root_dir, mode, size):
 
 
 # if __name__ == "__main__":
-    # processTrain()
-    # processValidation()
+#     label = {}
+#     label['label2index'] = {}
+#     label['index2label'] = {}
+    # processTrain(label)
+    # processValidation(label)
     # saveNumpyInstance('data', 'train', (112, 112))
+    # saveNumpyInstance('data', 'validation', (112, 112))
     # saveNumpyImage('data', 'train')
     # saveNumpyImage('data', 'validation')
+    # createInstance2Label('data')
     
 

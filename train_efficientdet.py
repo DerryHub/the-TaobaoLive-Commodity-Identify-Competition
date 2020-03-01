@@ -30,7 +30,7 @@ def train(opt):
                    "shuffle": False,
                    "drop_last": False,
                    "collate_fn": collater,
-                   "num_workers": 0}
+                   "num_workers": opt.workers}
 
     training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
                                transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
@@ -74,9 +74,10 @@ def train(opt):
             cls_loss = cls_loss.mean()
             reg_loss = reg_loss.mean()
             loss = cls_loss + reg_loss
+            loss_ = 2*cls_loss + reg_loss
             if loss == 0:
                 continue
-            loss.backward()
+            loss_.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
             optimizer.step()
             epoch_loss.append(float(loss))

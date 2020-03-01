@@ -13,7 +13,7 @@ class Arcface(nn.Module):
         m = config.m
 
         self.num_classes = num_classes
-        self.kernel = nn.Parameter(torch.Tensor(embedding_size,num_classes))
+        self.kernel = nn.Parameter(torch.Tensor(embedding_size, num_classes))
         # initial kernel
         self.kernel.data.uniform_(-1, 1).renorm_(2,1,1e-5).mul_(1e5)
         self.m = m # the margin value, default is 0.5

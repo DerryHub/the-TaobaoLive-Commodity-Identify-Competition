@@ -4,7 +4,7 @@ def get_args_efficientdet():
     parser = argparse.ArgumentParser("EfficientDet")
     parser.add_argument("--image_size", type=int, default=512, help="The common width and height for all images")
     parser.add_argument("--batch_size", type=int, default=20, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument("--num_epochs", type=int, default=500)
@@ -19,22 +19,22 @@ def get_args_efficientdet():
     parser.add_argument('--network', default='efficientdet-d0', type=str,
                         help='efficientdet-[d0, d1, ..]')
     parser.add_argument("--is_training", type=bool, default=True)
-    parser.add_argument('--resume', type=bool, default=False)
+    parser.add_argument('--resume', type=bool, default=True)
 
     parser.add_argument('--nms_threshold', type=float, default=0.3)
     parser.add_argument("--cls_threshold", type=float, default=0.3)
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=12)
     args = parser.parse_args()
     return args
 
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=112, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=80, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--batch_size", type=int, default=40, help="The number of images per batch")
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")

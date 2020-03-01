@@ -40,7 +40,7 @@ def train(opt):
     if opt.pretrain:
         h_name = 'linearlayer'
     else:
-        h_name = 'arcface'
+        h_name = 'arcface_'+opt.mode+'_{}'.format(opt.num_layers)
 
     print('backbone: {}'.format(b_name))
     print('head: {}'.format(h_name))
@@ -48,7 +48,7 @@ def train(opt):
     if opt.resume:
         print('Loading model...')
         backbone.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
-        head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
+        # head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
 
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
