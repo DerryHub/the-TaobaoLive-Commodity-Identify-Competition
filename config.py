@@ -39,7 +39,7 @@ def get_args_arcface():
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=None)
-    parser.add_argument("--num_layers", type=int, default=50, help="[50, 100, 152]")
+    parser.add_argument("--num_layers", type=int, default=100, help="[50, 100, 152]")
     parser.add_argument("--drop_ratio", type=float, default=0.1)
     parser.add_argument("--mode", type=str, default='ir_se', help="[ir, ir_se]")
     parser.add_argument("--embedding_size", type=int, default=512)

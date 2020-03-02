@@ -11,7 +11,6 @@ from efficientdet.config import EFFICIENTDET
 # from loss import FocalLoss
 from torchvision.ops.boxes import nms as nms_torch
 
-
 def nms(dets, thresh):
     return nms_torch(dets[:, :4], dets[:, 4], thresh)
 
@@ -178,6 +177,7 @@ class EfficientDet(nn.Module):
         super(EfficientDet, self).__init__()
         self.is_training = config.is_training
         self.nms_threshold = config.nms_threshold
+        self.cls_threshold = config.cls_threshold
         model_conf = EFFICIENTDET[config.network]
         self.num_channels = model_conf['W_bifpn']
         input_channels = model_conf['EfficientNet_output']
@@ -242,18 +242,18 @@ class EfficientDet(nn.Module):
             img_batch = inputs
 
         features = self.backbone_net(img_batch)[2:]
-        # for p in features:
-        #     print(p.size())
+        
         for i, conv in enumerate(self.convs):
             features[i] = conv(features[i])
 
         features = self.bifpn(features)
-
+        
         regression = torch.cat([self.regressor(feature) for feature in features], dim=1)
         classification = torch.cat([self.classifier(feature) for feature in features], dim=1)
+
         anchors = self.anchors(img_batch)
         # print(anchors.size())
-
+        
         if self.is_training:
             # print(classification.size(), regression.size(), anchors.size(), annotations.size())
             return self.focalLoss(classification, regression, anchors, annotations)
@@ -263,7 +263,8 @@ class EfficientDet(nn.Module):
             # print(transformed_anchors.size())
             scores = torch.max(classification, dim=2, keepdim=True)[0]
             # print(scores.size())
-            scores_over_thresh = (scores > 0.05)[:, :, 0]
+            # scores_over_thresh = (scores > 0.05)[:, :, 0]
+            scores_over_thresh = (scores > self.cls_threshold)[:, :, 0]
             # print(scores_over_thresh)
 
             output_list = []
@@ -282,6 +283,7 @@ class EfficientDet(nn.Module):
                 
                 nms_scores, nms_class = classification_i[i, anchors_nms_idx, :].max(dim=1)
                 output_list.append([nms_scores, nms_class, transformed_anchors_i[i, anchors_nms_idx, :]])
+
             return output_list
 
 

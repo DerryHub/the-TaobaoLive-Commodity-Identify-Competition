@@ -61,10 +61,10 @@ class EfficientdetDataset(Dataset):
                 t = []
                 t.append(os.path.join(tats[i], d['img_name']))
                 t.append(d['annotations'])
-                t.append(d['img_name'].split('_')[0])
+                t.append(d['img_name'])
                 self.images.append(t)
-
-        # self.images = self.images[:5000]
+        # print(len(self.images))
+        self.images = self.images[:2000]
         # for d in l_i:
         #     if len(d['annotations']) == 0:
         #         continue
@@ -86,7 +86,7 @@ class EfficientdetDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        imgPath, annotationsList, imgID = self.images[index]
+        imgPath, annotationsList, imgName = self.images[index]
         img = cv2.imread(os.path.join(self.root_dir, imgPath))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
@@ -110,12 +110,13 @@ class EfficientdetDataset(Dataset):
         return self.labelDic['index2label'][str(index)]
 
     def getImagePath(self, index):
-        imgPath, annotationsList, imgID = self.images[index]
+        imgPath, annotationsList, imgName = self.images[index]
         return imgPath
 
-    def getImageID(self, index):
-        imgPath, annotationsList, imgID = self.images[index]
-        return imgID
+    def getImageInfo(self, index):
+        imgPath, annotationsList, imgName = self.images[index]
+        imgID, frame = imgName[:-4].split('_')
+        return imgPath, imgID, frame
 
 '''
     for arcface
@@ -176,6 +177,7 @@ class ArcfaceDataset(Dataset):
 
         self.num_classes = len(self.clsDic)
 
+        # self.images = self.images[:100000]
         # self.items = []
         # for imgPath, box, instance_id in tqdm(self.images):
         #     img = cv2.imread(os.path.join(self.root_dir, imgPath))
@@ -277,13 +279,12 @@ class ValidationDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, index):
-        imgID, imgPath, xmin, ymin, xmax, ymax = self.items[index]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax = self.items[index]
         if imgPath != self.imgPath:
             self.imgPath = imgPath
             self.img = cv2.imread(os.path.join(self.root_dir, imgPath))
         det = self.img[ymin:ymax, xmin:xmax, :].copy()
         det = cv2.resize(det, self.size)
-        cv2.imwrite('aaa.jpg', det)
         det = cv2.cvtColor(det, cv2.COLOR_BGR2RGB)
         det = det.astype(np.float32) / 255
 
@@ -296,13 +297,7 @@ class ValidationDataset(Dataset):
 
         det = transform(det)
 
-        return {'img': det, 'imgID': imgID}
-
-
-            
-
-
-
+        return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
 
 
 if __name__ == "__main__":

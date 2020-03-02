@@ -4,7 +4,7 @@ import torch
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from dataset import EfficientdetDataset
-from utils import Resizer, Normalizer, collater
+from utils import Resizer, Normalizer, collater, iou
 from efficientdet.config import colors
 import cv2
 import shutil
@@ -12,22 +12,10 @@ from efficientdet.efficientdet import EfficientDet
 from config import get_args_efficientdet
 from tqdm import tqdm
 
+
 writePIC = False
 calIOU = False
 calPR = True
-
-def iou(a, b):
-    a = torch.clamp(a.long(), 0, 511)
-    b = torch.clamp(b.long(), 0, 511)
-    img_a = torch.zeros([512, 512])
-    img_b = torch.zeros([512, 512])
-    for t in a:
-        img_a[t[0]:t[2], t[1]:t[3]] = 1
-    for t in b:
-        img_b[t[0]:t[2], t[1]:t[3]] = 1
-    intersection = img_a*img_b
-    ua = torch.clamp(img_a+img_b, max=1)
-    return (intersection.sum()+1e-8) / (ua.sum()+1e-8)
     
 
 def test(opt):
