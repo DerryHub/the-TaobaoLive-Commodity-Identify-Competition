@@ -11,7 +11,7 @@ from efficientdet.efficientdet import EfficientDet
 from arcface.backbone import Backbone
 from config import get_args_efficientdet, get_args_arcface
 from tqdm import tqdm
-import datetime
+import joblib
 import json
 
 def pre_efficient(dataset, model, opt_e):
@@ -97,7 +97,6 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
                 d = sorted(d.items(), key=lambda x:x[1][0], reverse=True)
                 vdo2img.append([vdo_IDs[i+1000*index], d[0][0], d[0][1][0], i+1000*index, d[0][1][2]])
     return vdo2img
-
 
 def validate(opt_a, opt_e):
     k = 10

@@ -8,45 +8,39 @@ from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.cluster import MiniBatchKMeans
 import joblib
 import json
-
-def save_KMeans(opt):
-    model = Backbone(opt)
     
-    b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
 
-    opt.batch_size *= 4
-    model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
-    model.cuda()
-    model.eval()
+def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
+    print('Classifying with k-means...')
+    kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
+    vdo_cls = kmeans.predict(vdo_features)
+    img_cls = kmeans.predict(img_features)
 
-    training_params = {"batch_size": opt.batch_size,
-                        "shuffle": True,
-                        "drop_last": False,
-                        "num_workers": opt.workers}
+    vdo_cls = np.array(vdo_cls)
+    img_cls = np.array(img_cls)
 
-    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
-    training_generator = DataLoader(training_set, **training_params)
-    num_classes = training_set.num_classes
+    acc = 0
+    miss = 0
+    rates = []
+    for i, vc in enumerate(tqdm(vdo_cls)):
+        l = []
+        arg = np.argwhere(img_cls==vc).reshape(-1)
+        for j in arg:
+            if ins2labDic[instances[i]] == ins2labDic[instances[j]]:
+                similarity = vdo_features[i]@img_features[j].T
+                l.append([j, similarity])
+        if len(l) == 0:
+            miss += 1
+            continue
+        m = max(l, key=lambda x: x[1])
+        if m[0] == i:
+            acc += 1
+        rates.append(m[1])
+    print(miss/len(vdo_cls))
+    return rates, acc/len(vdo_cls)
 
-    features = np.zeros((0, opt.embedding_size))
-
-    print('predicting train data...')
-    for data in tqdm(training_generator):
-        img = data['img'].cuda()
-        with torch.no_grad():
-            embedding = model(img).cpu().numpy()
-        features = np.append(features, embedding, axis=0)
-    torch.cuda.empty_cache()
-
-    print('creating kmeans...')
-    kmeans = MiniBatchKMeans(n_clusters=num_classes, batch_size=20000, verbose=1)
-    kmeans.fit(features)
-
-    joblib.dump(kmeans, os.path.join(opt.saved_path, 'kmeans.m'))
-    
 
 def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
     print('Calculating cosine similarity...')
@@ -99,11 +93,45 @@ def evaluate(opt):
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
 
-    rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    # rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
     print(sum(rates)/len(rates), min(rates), max(rates))
     print(acc)
 
 if __name__ == "__main__":
+    import torchvision.transforms as transforms
     opt = get_args_arcface()
-    save_KMeans(opt)
-    # evaluate(opt)
+    evaluate(opt)
+    # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
+    # l = os.listdir('data/train_instance')
+    # ll = []
+    # for n in tqdm(l):
+    #     if '317900' in n:
+    #         ll.append(n)
+    # imgs = []
+    # for n in ll:
+    #     img = np.load(os.path.join('data/train_instance/', n)[:-4]+'.npy')
+
+    #     img = torch.from_numpy(img)
+    #     img = img.permute(2, 0, 1)
+    #     transform = transforms.Normalize(
+    #         mean=[0.55574415, 0.51230767, 0.51123354], 
+    #         std=[0.21303795, 0.21604613, 0.21273348])
+    #     img = transform(img)
+    #     imgs.append(img.unsqueeze(0))
+    # img = torch.cat(imgs)
+    # model = Backbone(opt)
+    
+    # b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
+
+    # model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
+    # model.cuda()
+    # model.eval()
+    # img = img.cuda()
+    # with torch.no_grad():
+    #     features = model(img).cpu().numpy()
+    # print(ll)
+    # print(kmeans.predict(features))
+
+
+

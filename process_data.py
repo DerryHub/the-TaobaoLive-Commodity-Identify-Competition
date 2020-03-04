@@ -178,6 +178,13 @@ def saveNumpyInstance(root_dir, mode, size):
     if mode == 'train':
         for imgPath, saveName, box, instance_id in tqdm(images):
             img = cv2.imread(os.path.join(root_dir, imgPath))
+            h, w, c = img.shape
+            dh = int((box[3]-box[1])*0.1)
+            dw = int((box[2]-box[0])*0.1)
+            box[1] = max(0, box[1]-dh)
+            box[3] = min(h, box[3]+dh)
+            box[0] = max(0, box[0]-dw)
+            box[2] = min(w, box[2]+dw)
             img = img[box[1]:box[3], box[0]:box[2], :]
             img = cv2.resize(img, size)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -294,16 +301,16 @@ def createInstance2Label(root_dir):
 
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 #     label = {}
 #     label['label2index'] = {}
 #     label['index2label'] = {}
-    # processTrain(label)
-    # processValidation(label)
-    # saveNumpyInstance('data', 'train', (112, 112))
-    # saveNumpyInstance('data', 'validation', (112, 112))
-    # saveNumpyImage('data', 'train')
-    # saveNumpyImage('data', 'validation')
-    # createInstance2Label('data')
+#     processTrain(label)
+#     processValidation(label)
+    saveNumpyInstance('data', 'train', (128, 128))
+#     saveNumpyInstance('data', 'validation', (112, 112))
+#     saveNumpyImage('data', 'train')
+#     saveNumpyImage('data', 'validation')
+#     createInstance2Label('data')
     
 

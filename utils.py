@@ -98,3 +98,4 @@ def iou(a, b):
     intersection = img_a*img_b
     ua = torch.clamp(img_a+img_b, max=1)
     return (intersection.sum()+1e-8) / (ua.sum()+1e-8)
+
