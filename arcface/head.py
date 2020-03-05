@@ -22,7 +22,12 @@ class Arcface(nn.Module):
         self.sin_m = math.sin(m)
         self.mm = self.sin_m * m  # issue 1
         self.threshold = math.cos(math.pi - m)
-    def forward(self, embbedings, label):
+    def forward(self, inputs):
+        if self.training:
+            embbedings, label = inputs
+        else:
+            embbedings = inputs
+            label = None
         # weights norm
         nB = len(embbedings)
         kernel_norm = l2_norm(self.kernel,axis=0)
@@ -43,7 +48,8 @@ class Arcface(nn.Module):
         cos_theta_m[cond_mask] = keep_val[cond_mask]
         output = cos_theta * 1.0 # a little bit hacky way to prevent in_place operation on cos_theta
         idx_ = torch.arange(0, nB, dtype=torch.long)
-        output[idx_, label] = cos_theta_m[idx_, label]
+        if label is not None:
+            output[idx_, label] = cos_theta_m[idx_, label]
         output *= self.s # scale up in order to make softmax work, first introduced in normface
         return output
 

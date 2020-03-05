@@ -85,7 +85,7 @@ def train(opt):
             label = data['label'].cuda()
 
             embedding = backbone(img)
-            output = head(embedding, label)
+            output = head([embedding, label])
 
             total += label.size(0)
             acc += (torch.argmax(output, dim=1)==label).sum().float()

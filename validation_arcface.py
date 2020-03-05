@@ -10,7 +10,6 @@ from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 import joblib
 import json
-    
 
 def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
     print('Classifying with k-means...')
@@ -60,8 +59,8 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
     
 
 def evaluate(opt):
-    dataset = ValidationArcfaceDataset(root_dir='data/validation_instance/')
-    opt.batch_size *= 4
+    dataset = ValidationArcfaceDataset(root_dir='data/validation_instance/', size=(opt.size, opt.size))
+    opt.batch_size *= 1
     loader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
 
     model = Backbone(opt)
@@ -93,8 +92,8 @@ def evaluate(opt):
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
 
-    # rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
-    rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
+    rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
     print(sum(rates)/len(rates), min(rates), max(rates))
     print(acc)
 
@@ -103,15 +102,18 @@ if __name__ == "__main__":
     opt = get_args_arcface()
     evaluate(opt)
     # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
+    # training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
+    # opt.num_classes = training_set.num_classes
     # l = os.listdir('data/train_instance')
     # ll = []
+    # # print(l[:100])
     # for n in tqdm(l):
-    #     if '317900' in n:
+    #     if '219636' in n:
     #         ll.append(n)
     # imgs = []
     # for n in ll:
     #     img = np.load(os.path.join('data/train_instance/', n)[:-4]+'.npy')
-
+    #     img = img[7:112+7, 7:112+7, :]
     #     img = torch.from_numpy(img)
     #     img = img.permute(2, 0, 1)
     #     transform = transforms.Normalize(
@@ -120,6 +122,14 @@ if __name__ == "__main__":
     #     img = transform(img)
     #     imgs.append(img.unsqueeze(0))
     # img = torch.cat(imgs)
+    # # features = []
+    # # for i in img:
+    # #     features.append(SIFT(i))
+    # # dis = []
+    # # for i in range(10):
+    # #     dis.append(hamming_distance(features[0], features[i]))
+    # # print(dis)
+    # # print(img.size())
     # model = Backbone(opt)
     
     # b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
@@ -129,9 +139,20 @@ if __name__ == "__main__":
     # model.eval()
     # img = img.cuda()
     # with torch.no_grad():
-    #     features = model(img).cpu().numpy()
-    # print(ll)
-    # print(kmeans.predict(features))
+    #     features = model(img)
+    # from arcface.head import Arcface
+    # opt.m = 0
+    # h = Arcface(opt)
+    # h_name = 'arcface_'+opt.mode+'_{}'.format(opt.num_layers)
+    # h.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
+    # h.cuda()
+    # # h.eval()
+    
+    # o = h([features, torch.zeros(17).long()]).cpu()
+    # o = torch.argmax(o, dim=1)
+    # print(o)
+    # # print(ll)
+    # # print(kmeans.predict(features))
 
 
 
