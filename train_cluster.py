@@ -50,8 +50,8 @@ def train_KMeans(opt):
         centerPoint = np.append(centerPoint, p.reshape(1, -1), axis=0)
     
     print('creating kmeans...')
-    # kmeans = MiniBatchKMeans(n_clusters=1000, batch_size=20000, verbose=1)
-    kmeans = KMeans(n_clusters=num_classes, n_jobs=8, verbose=1, init=centerPoint, tol=1e-8)
+    kmeans = MiniBatchKMeans(n_clusters=num_classes, batch_size=20000, verbose=1, init=centerPoint, tol=1e-8)
+    # kmeans = KMeans(n_clusters=num_classes, n_jobs=8, verbose=1, init=centerPoint, tol=1e-8)
     kmeans.fit(features)
 
     joblib.dump(kmeans, os.path.join(opt.saved_path, 'kmeans.m'))

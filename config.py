@@ -33,20 +33,28 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=112, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=64, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--batch_size", type=int, default=256, help="The number of images per batch")
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=None)
-    parser.add_argument("--num_layers", type=int, default=50, help="[50, 100, 152]")
     parser.add_argument("--drop_ratio", type=float, default=0.1)
-    parser.add_argument("--mode", type=str, default='ir_se', help="[ir, ir_se]")
     parser.add_argument("--embedding_size", type=int, default=512)
-    parser.add_argument('--resume', type=bool, default=True)
+    parser.add_argument('--resume', type=bool, default=False)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.5)
+    parser.add_argument("--m", type=float, default=0.1)
+    
+    parser.add_argument("--network", type=str, default='googlenet', help="[resnet, googlenet]")
+
+    # resnet config
+    parser.add_argument("--num_layers", type=int, default=50, help="[50, 100, 152]")
+    parser.add_argument("--mode", type=str, default='ir_se', help="[ir, ir_se]")
+
+    # googlenet config
+
+
     args = parser.parse_args()
     return args

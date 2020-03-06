@@ -92,8 +92,8 @@ def evaluate(opt):
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
 
-    rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
-    # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
+    # rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
     print(sum(rates)/len(rates), min(rates), max(rates))
     print(acc)
 
@@ -139,20 +139,20 @@ if __name__ == "__main__":
     # model.eval()
     # img = img.cuda()
     # with torch.no_grad():
-    #     features = model(img)
-    # from arcface.head import Arcface
-    # opt.m = 0
-    # h = Arcface(opt)
-    # h_name = 'arcface_'+opt.mode+'_{}'.format(opt.num_layers)
-    # h.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
-    # h.cuda()
-    # # h.eval()
+    #     features = model(img).cpu().numpy()
+    # # from arcface.head import Arcface
+    # # opt.m = 0
+    # # h = Arcface(opt)
+    # # h_name = 'arcface_'+opt.mode+'_{}'.format(opt.num_layers)
+    # # h.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
+    # # h.cuda()
+    # # # h.eval()
     
-    # o = h([features, torch.zeros(17).long()]).cpu()
-    # o = torch.argmax(o, dim=1)
-    # print(o)
-    # # print(ll)
-    # # print(kmeans.predict(features))
+    # # o = h([features, torch.zeros(17).long()]).cpu()
+    # # o = torch.argmax(o, dim=1)
+    # # print(o)
+    # # # print(ll)
+    # print(kmeans.predict(features))
 
 
 

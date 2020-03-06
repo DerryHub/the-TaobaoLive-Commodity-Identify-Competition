@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader
 from torch import optim
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
-from arcface.backbone import Backbone
+from arcface.resnet import ResNet
+from arcface.googlenet import GoogLeNet
 from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
@@ -30,17 +31,24 @@ def train(opt):
 
     opt.num_classes = training_set.num_classes
 
-    backbone = Backbone(opt)
+    if opt.network == 'resnet':
+        backbone = ResNet(opt)
+        b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers)
+        h_name = 'arcface_'+b_name
+    elif opt.network == 'googlenet':
+        backbone = GoogLeNet(opt)
+        b_name = opt.network
+        h_name = 'arcface_'+b_name
+    else:
+        raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
+
     if opt.pretrain:
         head = LinearLayer(opt)
     else:
         head = Arcface(opt)
 
-    b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
     if opt.pretrain:
         h_name = 'linearlayer'
-    else:
-        h_name = 'arcface_'+opt.mode+'_{}'.format(opt.num_layers)
 
     print('backbone: {}'.format(b_name))
     print('head: {}'.format(h_name))

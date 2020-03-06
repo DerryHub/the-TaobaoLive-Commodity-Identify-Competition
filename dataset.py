@@ -290,31 +290,24 @@ class ValidationArcfaceDataset(Dataset):
         img = np.load(os.path.join(self.root_dir, imgPath))
         vdo = np.load(os.path.join(self.root_dir, vdoPath))
         
-        img = self.resize(img, self.size)
-        # print(img)
-        # mi = min(img.reshape(-1))
-        # ma = max(img.reshape(-1))
-        # print(mi, ma)
-        # im = Image.fromarray(((img-mi)*256/(ma-mi)).astype(np.uint8))
-        # im.save('bbb.jpg')
-        vdo = self.resize(vdo, self.size)
-        # mi = min(vdo.reshape(-1))
-        # ma = max(vdo.reshape(-1))
-        # im = Image.fromarray(((vdo-mi)*256/(ma-mi)).astype(np.uint8))
-        # print(mi, ma)
-        # im.save('aaa.jpg')
+        hi, wi, ci = img.shape
+        hv, wv, cv = vdo.shape
+        assert (hi, wi, ci) == (hv, wv, cv)
+        if self.size != (hi, wi):
+            img = self.resize(img, self.size)
+            vdo = self.resize(vdo, self.size)
 
-        # transform = transforms.Normalize(
-        #     mean=[0.55574415, 0.51230767, 0.51123354], 
-        #     std=[0.21303795, 0.21604613, 0.21273348])
+        transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
 
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
         vdo = torch.from_numpy(vdo)
         vdo = vdo.permute(2, 0, 1)
 
-        # img = transform(img)
-        # vdo = transform(vdo)
+        img = transform(img)
+        vdo = transform(vdo)
 
         return {'img': img, 'vdo': vdo, 'instance':instance}
 

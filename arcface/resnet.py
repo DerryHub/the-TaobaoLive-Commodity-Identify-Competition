@@ -1,22 +1,19 @@
-from torch.nn import Linear, Conv2d, BatchNorm1d, BatchNorm2d, PReLU, ReLU, Sigmoid, Dropout, MaxPool2d, AdaptiveAvgPool2d, Sequential, Module
 import torch
+from torch import nn
 from collections import namedtuple
-from arcface.utils import l2_norm
+from arcface.utils import l2_norm, Flatten
 
-class Flatten(Module):
-    def forward(self, input):
-        return input.view(input.size(0), -1)
 
-class SEModule(Module):
+class SEModule(nn.Module):
     def __init__(self, channels, reduction):
         super(SEModule, self).__init__()
-        self.avg_pool = AdaptiveAvgPool2d(1)
-        self.fc1 = Conv2d(
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc1 = nn.Conv2d(
             channels, channels // reduction, kernel_size=1, padding=0 ,bias=False)
-        self.relu = ReLU(inplace=True)
-        self.fc2 = Conv2d(
+        self.relu = nn.ReLU(inplace=True)
+        self.fc2 = nn.Conv2d(
             channels // reduction, channels, kernel_size=1, padding=0 ,bias=False)
-        self.sigmoid = Sigmoid()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         module_input = x
@@ -27,39 +24,39 @@ class SEModule(Module):
         x = self.sigmoid(x)
         return module_input * x
 
-class bottleneck_IR(Module):
+class bottleneck_IR(nn.Module):
     def __init__(self, in_channel, depth, stride):
         super(bottleneck_IR, self).__init__()
         if in_channel == depth:
-            self.shortcut_layer = MaxPool2d(1, stride)
+            self.shortcut_layer = nn.MaxPool2d(1, stride)
         else:
-            self.shortcut_layer = Sequential(
-                Conv2d(in_channel, depth, (1, 1), stride ,bias=False), BatchNorm2d(depth))
-        self.res_layer = Sequential(
-            BatchNorm2d(in_channel),
-            Conv2d(in_channel, depth, (3, 3), (1, 1), 1 ,bias=False), PReLU(depth),
-            Conv2d(depth, depth, (3, 3), stride, 1 ,bias=False), BatchNorm2d(depth))
+            self.shortcut_layer = nn.Sequential(
+                nn.Conv2d(in_channel, depth, (1, 1), stride ,bias=False), nn.BatchNorm2d(depth))
+        self.res_layer = nn.Sequential(
+            nn.BatchNorm2d(in_channel),
+            nn.Conv2d(in_channel, depth, (3, 3), (1, 1), 1 ,bias=False), nn.PReLU(depth),
+            nn.Conv2d(depth, depth, (3, 3), stride, 1 ,bias=False), nn.BatchNorm2d(depth))
 
     def forward(self, x):
         shortcut = self.shortcut_layer(x)
         res = self.res_layer(x)
         return res + shortcut
 
-class bottleneck_IR_SE(Module):
+class bottleneck_IR_SE(nn.Module):
     def __init__(self, in_channel, depth, stride):
         super(bottleneck_IR_SE, self).__init__()
         if in_channel == depth:
-            self.shortcut_layer = MaxPool2d(1, stride)
+            self.shortcut_layer = nn.MaxPool2d(1, stride)
         else:
-            self.shortcut_layer = Sequential(
-                Conv2d(in_channel, depth, (1, 1), stride ,bias=False), 
-                BatchNorm2d(depth))
-        self.res_layer = Sequential(
-            BatchNorm2d(in_channel),
-            Conv2d(in_channel, depth, (3,3), (1,1),1 ,bias=False),
-            PReLU(depth),
-            Conv2d(depth, depth, (3,3), stride, 1 ,bias=False),
-            BatchNorm2d(depth),
+            self.shortcut_layer = nn.Sequential(
+                nn.Conv2d(in_channel, depth, (1, 1), stride ,bias=False), 
+                nn.BatchNorm2d(depth))
+        self.res_layer = nn.Sequential(
+            nn.BatchNorm2d(in_channel),
+            nn.Conv2d(in_channel, depth, (3,3), (1,1),1 ,bias=False),
+            nn.PReLU(depth),
+            nn.Conv2d(depth, depth, (3,3), stride, 1 ,bias=False),
+            nn.BatchNorm2d(depth),
             SEModule(depth,16)
             )
     def forward(self,x):
@@ -97,9 +94,9 @@ def get_blocks(num_layers):
         ]
     return blocks
 
-class Backbone(Module):
+class ResNet(nn.Module):
     def __init__(self, config):
-        super(Backbone, self).__init__()
+        super(ResNet, self).__init__()
         num_layers = config.num_layers
         drop_ratio = config.drop_ratio
         mode = config.mode
@@ -112,14 +109,14 @@ class Backbone(Module):
             unit_module = bottleneck_IR
         elif mode == 'ir_se':
             unit_module = bottleneck_IR_SE
-        self.input_layer = Sequential(Conv2d(3, 64, (3, 3), 1, 1 ,bias=False), 
-                                      BatchNorm2d(64), 
-                                      PReLU(64))
-        self.output_layer = Sequential(BatchNorm2d(512), 
-                                       Dropout(drop_ratio),
+        self.input_layer = nn.Sequential(nn.Conv2d(3, 64, (3, 3), 1, 1 ,bias=False), 
+                                      nn.BatchNorm2d(64), 
+                                      nn.PReLU(64))
+        self.output_layer = nn.Sequential(nn.BatchNorm2d(512), 
+                                       nn.Dropout(drop_ratio),
                                        Flatten(),
-                                       Linear(512 * 7 * 7, embedding_size),
-                                       BatchNorm1d(embedding_size))
+                                       nn.Linear(512 * 7 * 7, embedding_size),
+                                       nn.BatchNorm1d(embedding_size))
         modules = []
         for block in blocks:
             for bottleneck in block:
@@ -127,8 +124,24 @@ class Backbone(Module):
                     unit_module(bottleneck.in_channel,
                                 bottleneck.depth,
                                 bottleneck.stride))
-        self.body = Sequential(*modules)
+        self.body = nn.Sequential(*modules)
+
+        if not config.resume:
+            self._initialize_weights()
     
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                import scipy.stats as stats
+                X = stats.truncnorm(-2, 2, scale=0.01)
+                values = torch.as_tensor(X.rvs(m.weight.numel()), dtype=m.weight.dtype)
+                values = values.view(m.weight.size())
+                with torch.no_grad():
+                    m.weight.copy_(values)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
     def forward(self,x):
         x = self.input_layer(x)
         x = self.body(x)
