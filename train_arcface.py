@@ -12,6 +12,7 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
+from arcface.utils import l2_norm
 import numpy as np
 
 def train(opt):
@@ -109,15 +110,19 @@ def train(opt):
             acc += (torch.argmax(output, dim=1)==label).sum().float()
 
             loss = cost(output, label)
+            loss_head = torch.sum(torch.sum(l2_norm(head.module.kernel, axis=0), dim=1)**2)
 
-            loss.backward()
+            loss_all = loss + loss_head
+            loss_all.backward()
             optimizer.step()
             epoch_loss.append(float(loss))
             total_loss = np.mean(epoch_loss)
 
             progress_bar.set_description('Epoch: {}/{}. Iteration: {}/{}'.format(epoch + 1, opt.num_epochs, iter + 1, num_iter_per_epoch))
             
-            progress_bar.write('Batch loss: {:.5f}\tTotal loss: {:.5f}\tAccuracy: {:.5f}'.format(loss, total_loss, acc/total))
+            progress_bar.write(
+                'Batch loss: {:.5f}\tTotal loss: {:.5f}\tHead loss: {:.5f}\tAccuracy: {:.5f}'.format(
+                loss, total_loss, loss_head, acc/total))
 
         scheduler.step(np.mean(epoch_loss))
 
