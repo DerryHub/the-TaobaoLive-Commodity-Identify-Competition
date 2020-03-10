@@ -204,23 +204,26 @@ class ArcfaceDataset(Dataset):
 
         h, w, c = img.shape
 
-        if h == 128:
-            rh = random.randint(0, h-self.size[0])
-            rw = random.randint(0, w-self.size[0]*w//h)
-            img = img[rh:self.size[0]+rh, rw:self.size[0]*w//h+rw, :]
-            common_h = self.size[0]
-            common_w = self.size[0]*w//h
-        elif w == 128:
-            rh = random.randint(0, h-self.size[1]*h//w)
-            rw = random.randint(0, w-self.size[1])
-            img = img[rh:self.size[1]*h//w+rh, rw:self.size[1]+rw, :]
-            common_h = self.size[1]*h//w
-            common_w = self.size[1]
-        else:
-            raise RuntimeError('shape error')
+        rh = random.randint(0, h-self.size[0])
+        rw = random.randint(0, w-self.size[1])
+
+        # if h == 128:
+        #     rh = random.randint(0, h-self.size[0])
+        #     rw = random.randint(0, w-self.size[0]*w//h)
+        #     img = img[rh:self.size[0]+rh, rw:self.size[0]*w//h+rw, :]
+        #     common_h = self.size[0]
+        #     common_w = self.size[0]*w//h
+        # elif w == 128:
+        #     rh = random.randint(0, h-self.size[1]*h//w)
+        #     rw = random.randint(0, w-self.size[1])
+        #     img = img[rh:self.size[1]*h//w+rh, rw:self.size[1]+rw, :]
+        #     common_h = self.size[1]*h//w
+        #     common_w = self.size[1]
+        # else:
+        #     raise RuntimeError('shape error')
 
 
-        # img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+        img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
         label = torch.tensor(self.clsDic[instance_id])
 
@@ -233,11 +236,98 @@ class ArcfaceDataset(Dataset):
             std=[0.21303795, 0.21604613, 0.21273348])
         img = transform(img)
 
-        img_o = torch.zeros(3, self.size[0], self.size[1])
-        img_o[:, :common_h, :common_w] = img
+        # img_o = torch.zeros(3, self.size[0], self.size[1])
+        # img_o[:, :common_h, :common_w] = img
 
-        return {'img':img_o, 'label':label}
-        
+        return {'img':img, 'label':label}
+
+'''
+    for classify
+'''
+
+class ClassifierDataset(Dataset):
+    def __init__(self, size=(112, 112), root_dir='data', mode='train', flip_x=0.5):
+        assert mode in ['train', 'validation']
+        self.root_dir = root_dir
+        self.size = size
+        self.flip_x = flip_x
+        self.mode = mode
+
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
+        savePath = mode + '_instance'
+        self.savePath = os.path.join(root_dir, savePath)
+
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
+
+        with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
+            instance2label = json.load(f)       
+
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
+
+        self.images = []
+
+        self.clsDic = {}
+
+        print('Loading data...')
+        for d in l_i:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    t = []
+                    if mode == 'train':
+                        t.append(img_tat+str(dd['instance_id'])+d['img_name'])
+                    else:
+                        t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
+                    t.append(instance2label[str(dd['instance_id'])])
+                    self.images.append(t)
+
+        for d in l_v:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    t = []
+                    if mode == 'train':
+                        t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
+                    else:
+                        t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
+                    t.append(instance2label[str(dd['instance_id'])])
+                    self.images.append(t)
+
+
+        self.num_classes = len(instance2label)
+        print('Done')
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        imgName, label = self.images[index]
+        img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
+
+        if self.mode == 'train':
+            h, w, c = img.shape
+
+            rh = random.randint(0, h-self.size[0])
+            rw = random.randint(0, w-self.size[1])
+
+            img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+            if np.random.rand() < self.flip_x:
+                img = img[:, ::-1, :].copy()
+
+        label = torch.tensor(label)
+
+        img = torch.from_numpy(img)
+        img = img.permute(2, 0, 1)
+        transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+        img = transform(img)
+
+        return {'img':img, 'label':label}
 
 '''
     for validation
@@ -368,10 +458,168 @@ class ValidationDataset(Dataset):
 
         return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
 
+'''
+    for test
+'''
 
-# if __name__ == "__main__":
+class TestImageDataset(Dataset):
+    def __init__(self, root_dir='data', dir_list=['validation_dataset_part1', 'validation_dataset_part2'], transform=None):
+        self.root_dir = root_dir
+        self.transform = transform
+        self.mode = 'image'
+
+        label_file = 'label.json'
+        with open(os.path.join(root_dir, label_file), 'r') as f:
+            self.labelDic = json.load(f)
+
+        self.num_classes = len(self.labelDic['label2index'])
+
+        dirs = [os.path.join(root_dir, d) for d in dir_list]
+
+        self.images = []
+        self.ids = []
+        self.frames = []
+        
+        for di in dirs:
+            img_dir_list = os.listdir(os.path.join(di, 'image'))
+            for img_dir in img_dir_list:
+                img_names = os.listdir(os.path.join(di, 'image', img_dir))
+                for img_name in img_names:
+                    self.images.append(os.path.join(di, 'image', img_dir, img_name))
+                    self.frames.append(img_name.split('.')[0])
+                    self.ids.append(img_dir)
+        # self.images = self.images[:1000]
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        imgPath = self.images[index]
+        img = cv2.imread(imgPath)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
+        
+        sample = {'img': img}
+        if self.transform:
+            sample = self.transform(sample)
+        return sample
+
+    def getImageInfo(self, index):
+        imgPath = self.images[index]
+        img_id = self.ids[index]
+        frame = self.frames[index]
+        return imgPath, img_id, frame
+
+
+class TestVideoDataset(Dataset):
+    def __init__(self, root_dir='data', dir_list=['validation_dataset_part1', 'validation_dataset_part2'], transform=None, n=10):
+        self.root_dir = root_dir
+        self.transform = transform
+        self.n = n
+        self.mode = 'video'
+
+        label_file = 'label.json'
+        with open(os.path.join(root_dir, label_file), 'r') as f:
+            self.labelDic = json.load(f)
+
+        self.num_classes = len(self.labelDic['label2index'])
+
+        dirs = [os.path.join(root_dir, d) for d in dir_list]
+
+        gap = 400 // n
+        self.frames_ids = [i*gap for i in range(n)]
+        self.videos = []
+        self.ids = []
+        
+        for di in dirs:
+            vdo_names = os.listdir(os.path.join(di, 'video'))
+            for vdo_name in vdo_names:
+                self.videos.append(os.path.join(di, 'video', vdo_name))
+                self.ids.append(vdo_name.split('.')[0])
+        # self.videos = self.videos[:100]
+
+    def __len__(self):
+        return len(self.videos)*self.n
+
+    def __getitem__(self, index):
+        v_index = index // self.n
+        f_index = self.frames_ids[index % self.n]
+        vdo_name = self.videos[v_index]
+        cap = cv2.VideoCapture(vdo_name)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
+        ret, img = cap.read()
+        # frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        # for i in range(int(frames)):
+        #     ret, frame = cap.read()
+        #     if i == f_index:
+        #         img = frame
+        #         break
+        cap.release()
+        
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
+        
+        sample = {'img': img}
+        if self.transform:
+            sample = self.transform(sample)
+        return sample
+
+    def getImageInfo(self, index):
+        v_index = index // self.n
+        frame = self.frames_ids[index % self.n]
+        vdoPath = self.videos[v_index]
+        vdo_id = self.ids[v_index]
+        return vdoPath, vdo_id, str(frame)
+
+
+class TestDataset(Dataset):
+    def __init__(self, root_dir, items, size, mode):
+        assert mode in ['image', 'video']
+        self.mode = mode
+        self.size = size
+        self.root_dir = root_dir
+        self.items = items
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, index):
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax = self.items[index]
+        if self.mode == 'image':
+            img = cv2.imread(imgPath)
+        else:
+            cap = cv2.VideoCapture(imgPath)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
+            ret, img = cap.read()
+            # frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            # for i in range(int(frames)):
+            #     ret, img = cap.read()
+            #     if i == int(frame):
+            #         break
+            cap.release()
+        det = img[ymin:ymax, xmin:xmax, :].copy()
+        det = cv2.resize(det, self.size)
+        det = cv2.cvtColor(det, cv2.COLOR_BGR2RGB)
+        det = det.astype(np.float32) / 255
+
+        transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+        
+        det = torch.from_numpy(det)
+        det = det.permute(2, 0, 1)
+
+        det = transform(det)
+
+        return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
+
+
+if __name__ == "__main__":
 #     from PIL import Image
-#     dataset = ValidationArcfaceDataset()
+    dataset = TestImageDataset()
+    # print(dataset[0])
+    for d in tqdm(dataset):
+        pass
 #     img = dataset[0]['img']
 #     mi = min(img.view(-1))
 #     ma = max(img.view(-1))

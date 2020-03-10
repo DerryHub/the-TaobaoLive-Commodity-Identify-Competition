@@ -67,7 +67,6 @@ def train(opt):
         epoch_loss = []
         progress_bar = tqdm(training_generator)
         for iter, data in enumerate(progress_bar):
-            # try:
             optimizer.zero_grad()
             cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
 
@@ -88,9 +87,6 @@ def train(opt):
             progress_bar.write('Cls loss: {:.5f}\tReg loss: {:.5f}\tBatch loss: {:.5f}\tTotal loss: {:.5f}'.format(
                     cls_loss, reg_loss, loss, total_loss))
 
-            # except Exception as e:
-            #     print(e)
-            #     continue
         scheduler.step(np.mean(epoch_loss))
 
         if epoch % opt.test_interval == 0:

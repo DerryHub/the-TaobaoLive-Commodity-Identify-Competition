@@ -141,9 +141,9 @@ def saveNumpyInstance(root_dir, mode, size):
     savePath = mode + '_instance'
     savePath = os.path.join(root_dir, savePath)
 
-    if os.path.isdir(savePath):
-        rmtree(savePath)
-    os.makedirs(savePath)
+    # if os.path.isdir(savePath):
+    #     rmtree(savePath)
+    # os.makedirs(savePath)
 
     with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
         d_i = json.load(f)
@@ -158,9 +158,17 @@ def saveNumpyInstance(root_dir, mode, size):
     for d in l_i:
         for dd in d['annotations']:
             if dd['instance_id'] > 0:
+                pass
+                # t = []
+                # t.append(os.path.join(img_tat, d['img_name']))
+                # t.append(img_tat+str(dd['instance_id'])+d['img_name'])
+                # t.append(dd['box'])
+                # t.append(dd['instance_id'])
+                # images.append(t)
+            else:
                 t = []
                 t.append(os.path.join(img_tat, d['img_name']))
-                t.append(img_tat+str(dd['instance_id'])+d['img_name'])
+                t.append(img_tat+str(dd['instance_id'])+str(dd['label'])+d['img_name'])
                 t.append(dd['box'])
                 t.append(dd['instance_id'])
                 images.append(t)
@@ -168,9 +176,17 @@ def saveNumpyInstance(root_dir, mode, size):
     for d in l_v:
         for dd in d['annotations']:
             if dd['instance_id'] > 0:
+                pass
+                # t = []
+                # t.append(os.path.join(vdo_tat, d['img_name']))
+                # t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
+                # t.append(dd['box'])
+                # t.append(dd['instance_id'])
+                # images.append(t)
+            else:
                 t = []
                 t.append(os.path.join(vdo_tat, d['img_name']))
-                t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
+                t.append(vdo_tat+str(dd['instance_id'])+str(dd['label'])+d['img_name'])
                 t.append(dd['box'])
                 t.append(dd['instance_id'])
                 images.append(t)
@@ -186,15 +202,15 @@ def saveNumpyInstance(root_dir, mode, size):
             box[0] = max(0, box[0]-dw)
             box[2] = min(w, box[2]+dw)
             img = img[box[1]:box[3], box[0]:box[2], :]
-            # img = cv2.resize(img, size)
-            h, w, c = img.shape
-            if h > w:
-                nh = size
-                nw = size*w//h
-            else:
-                nw = size
-                nh = size*h//w
-            img = cv2.resize(img, (nw, nh))
+            img = cv2.resize(img, size)
+            # h, w, c = img.shape
+            # if h > w:
+            #     nh = size
+            #     nw = size*w//h
+            # else:
+            #     nw = size
+            #     nh = size*h//w
+            # img = cv2.resize(img, (nw, nh))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = img.astype(np.float32) / 255
             np.save(os.path.join(savePath, saveName)[:-4]+'.npy', img)
@@ -204,15 +220,15 @@ def saveNumpyInstance(root_dir, mode, size):
                 os.mkdir(os.path.join(savePath, str(instance_id)))
             img = cv2.imread(os.path.join(root_dir, imgPath))
             img = img[box[1]:box[3], box[0]:box[2], :]
-            # img = cv2.resize(img, size)
-            h, w, c = img.shape
-            if h > w:
-                nh = size
-                nw = size*w//h
-            else:
-                nw = size
-                nh = size*h//w
-            img = cv2.resize(img, (nw, nh))
+            img = cv2.resize(img, size)
+            # h, w, c = img.shape
+            # if h > w:
+            #     nh = size
+            #     nw = size*w//h
+            # else:
+            #     nw = size
+            #     nh = size*h//w
+            # img = cv2.resize(img, (nw, nh))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = img.astype(np.float32) / 255
             np.save(os.path.join(savePath, str(instance_id), saveName)[:-4]+'.npy', img)
@@ -267,8 +283,8 @@ if __name__ == "__main__":
 #     label['index2label'] = {}
 #     processTrain(label)
 #     processValidation(label)
-    saveNumpyInstance('data', 'train', 128)
-    saveNumpyInstance('data', 'validation', 112)
+    saveNumpyInstance('data', 'train', (128, 128))
+    saveNumpyInstance('data', 'validation', (112, 112))
 #     saveNumpyInstance('data', 'validation', (112, 112))
 #     saveNumpyImage('data', 'train')
 #     saveNumpyImage('data', 'validation')
