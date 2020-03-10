@@ -8,7 +8,10 @@ from torch.utils.data import DataLoader
 from dataset import EfficientdetDataset, ValidationDataset
 from utils import Resizer, Normalizer, collater, iou
 from efficientdet.efficientdet import EfficientDet
-from arcface.backbone import Backbone
+from arcface.resnet import ResNet
+from arcface.googlenet import GoogLeNet
+from arcface.inception_v4 import InceptionV4
+from arcface.inceptionresnet_v2 import InceptionResNetV2
 from config import get_args_efficientdet, get_args_arcface
 from tqdm import tqdm
 import joblib
@@ -120,9 +123,21 @@ def validate(opt_a, opt_e):
     efficientdet.set_is_training(False)
     efficientdet.eval()
 
-    backbone = Backbone(opt_a)
+    if opt_a.network == 'resnet':
+        backbone = ResNet(opt_a)
+        b_name = opt_a.network+'_'+opt_a.mode+'_{}'.format(opt_a.num_layers)
+    elif opt_a.network == 'googlenet':
+        backbone = GoogLeNet(opt_a)
+        b_name = opt_a.network
+    elif opt_a.network == 'inceptionv4':
+        backbone = InceptionV4(opt_a)
+        b_name = opt_a.network
+    elif opt_a.network == 'inceptionresnetv2':
+        backbone = InceptionResNetV2(opt_a)
+        b_name = opt_a.network
+    else:
+        raise RuntimeError('Cannot Find the Model: {}'.format(opt_a.network))
         
-    b_name = 'backbone_'+opt_a.mode+'_{}'.format(opt_a.num_layers)
 
     backbone.load_state_dict(torch.load(os.path.join(opt_a.saved_path, b_name+'.pth')))
     backbone.cuda()

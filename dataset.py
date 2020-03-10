@@ -8,7 +8,6 @@ import torchvision.transforms as transforms
 import cv2
 import random
 
-from PIL import Image
 '''
     for efficientdet
 '''
@@ -205,10 +204,23 @@ class ArcfaceDataset(Dataset):
 
         h, w, c = img.shape
 
-        rh = random.randint(0, h-self.size[0])
-        rw = random.randint(0, w-self.size[1])
+        if h == 128:
+            rh = random.randint(0, h-self.size[0])
+            rw = random.randint(0, w-self.size[0]*w//h)
+            img = img[rh:self.size[0]+rh, rw:self.size[0]*w//h+rw, :]
+            common_h = self.size[0]
+            common_w = self.size[0]*w//h
+        elif w == 128:
+            rh = random.randint(0, h-self.size[1]*h//w)
+            rw = random.randint(0, w-self.size[1])
+            img = img[rh:self.size[1]*h//w+rh, rw:self.size[1]+rw, :]
+            common_h = self.size[1]*h//w
+            common_w = self.size[1]
+        else:
+            raise RuntimeError('shape error')
 
-        img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+        # img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
         label = torch.tensor(self.clsDic[instance_id])
 
@@ -221,7 +233,10 @@ class ArcfaceDataset(Dataset):
             std=[0.21303795, 0.21604613, 0.21273348])
         img = transform(img)
 
-        return {'img':img, 'label':label}
+        img_o = torch.zeros(3, self.size[0], self.size[1])
+        img_o[:, :common_h, :common_w] = img
+
+        return {'img':img_o, 'label':label}
         
 
 '''
@@ -229,7 +244,7 @@ class ArcfaceDataset(Dataset):
 '''
 
 class ValidationArcfaceDataset(Dataset):
-    def __init__(self, size, root_dir='data/validation_instance/'):
+    def __init__(self, size=(112, 112), root_dir='data/validation_instance/'):
         self.root_dir = root_dir
         self.size = size
         instances = os.listdir(root_dir)
@@ -254,33 +269,33 @@ class ValidationArcfaceDataset(Dataset):
             l.append(instance)
             self.items.append(l)
         
-    def resize(self, src, new_size):
-        dst_w, dst_h = new_size # 目标图像宽高
-        src_h, src_w = src.shape[:2] # 源图像宽高
-        if src_h == dst_h and src_w == dst_w:
-            return src.copy()
-        scale_x = float(src_w) / dst_w # x缩放比例
-        scale_y = float(src_h) / dst_h # y缩放比例
+    # def resize(self, src, new_size):
+    #     dst_w, dst_h = new_size # 目标图像宽高
+    #     src_h, src_w = src.shape[:2] # 源图像宽高
+    #     if src_h == dst_h and src_w == dst_w:
+    #         return src.copy()
+    #     scale_x = float(src_w) / dst_w # x缩放比例
+    #     scale_y = float(src_h) / dst_h # y缩放比例
 
-        # 遍历目标图像，插值
-        dst = np.zeros((dst_h, dst_w, 3))
-        for n in range(3): # 对channel循环
-            for dst_y in range(dst_h): # 对height循环
-                for dst_x in range(dst_w): # 对width循环
-                    # 目标在源上的坐标
-                    src_x = (dst_x + 0.5) * scale_x - 0.5
-                    src_y = (dst_y + 0.5) * scale_y - 0.5
-                    # 计算在源图上四个近邻点的位置
-                    src_x_0 = int(np.floor(src_x))
-                    src_y_0 = int(np.floor(src_y))
-                    src_x_1 = min(src_x_0 + 1, src_w - 1)
-                    src_y_1 = min(src_y_0 + 1, src_h - 1)
+    #     # 遍历目标图像，插值
+    #     dst = np.zeros((dst_h, dst_w, 3))
+    #     for n in range(3): # 对channel循环
+    #         for dst_y in range(dst_h): # 对height循环
+    #             for dst_x in range(dst_w): # 对width循环
+    #                 # 目标在源上的坐标
+    #                 src_x = (dst_x + 0.5) * scale_x - 0.5
+    #                 src_y = (dst_y + 0.5) * scale_y - 0.5
+    #                 # 计算在源图上四个近邻点的位置
+    #                 src_x_0 = int(np.floor(src_x))
+    #                 src_y_0 = int(np.floor(src_y))
+    #                 src_x_1 = min(src_x_0 + 1, src_w - 1)
+    #                 src_y_1 = min(src_y_0 + 1, src_h - 1)
 
-                    # 双线性插值
-                    value0 = (src_x_1 - src_x) * src[src_y_0, src_x_0, n] + (src_x - src_x_0) * src[src_y_0, src_x_1, n]
-                    value1 = (src_x_1 - src_x) * src[src_y_1, src_x_0, n] + (src_x - src_x_0) * src[src_y_1, src_x_1, n]
-                    dst[dst_y, dst_x, n] = float((src_y_1 - src_y) * value0 + (src_y - src_y_0) * value1)
-        return dst
+    #                 # 双线性插值
+    #                 value0 = (src_x_1 - src_x) * src[src_y_0, src_x_0, n] + (src_x - src_x_0) * src[src_y_0, src_x_1, n]
+    #                 value1 = (src_x_1 - src_x) * src[src_y_1, src_x_0, n] + (src_x - src_x_0) * src[src_y_1, src_x_1, n]
+    #                 dst[dst_y, dst_x, n] = float((src_y_1 - src_y) * value0 + (src_y - src_y_0) * value1)
+    #     return dst
     
     def __len__(self):
         return len(self.items)
@@ -292,10 +307,13 @@ class ValidationArcfaceDataset(Dataset):
         
         hi, wi, ci = img.shape
         hv, wv, cv = vdo.shape
-        assert (hi, wi, ci) == (hv, wv, cv)
-        if self.size != (hi, wi):
-            img = self.resize(img, self.size)
-            vdo = self.resize(vdo, self.size)
+
+        assert max(hi, wi) == 112
+        assert max(hv, wv) == 112
+        # assert (hi, wi, ci) == (hv, wv, cv)
+        # if self.size != (hi, wi):
+        #     img = self.resize(img, self.size)
+        #     vdo = self.resize(vdo, self.size)
 
         transform = transforms.Normalize(
             mean=[0.55574415, 0.51230767, 0.51123354], 
@@ -309,7 +327,13 @@ class ValidationArcfaceDataset(Dataset):
         img = transform(img)
         vdo = transform(vdo)
 
-        return {'img': img, 'vdo': vdo, 'instance':instance}
+        img_o = torch.zeros(3, self.size[0], self.size[1])
+        img_o[:, :hi, :wi] = img
+
+        vdo_o = torch.zeros(3, self.size[0], self.size[1])
+        vdo_o[:, :hv, :wv] = vdo
+
+        return {'img': img_o, 'vdo': vdo_o, 'instance':instance}
 
 
 class ValidationDataset(Dataset):
@@ -345,9 +369,27 @@ class ValidationDataset(Dataset):
         return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
 
 
-if __name__ == "__main__":
-    dataset = ValidationArcfaceDataset(size=(100,100))
-    dataset[0]
+# if __name__ == "__main__":
+#     from PIL import Image
+#     dataset = ValidationArcfaceDataset()
+#     img = dataset[0]['img']
+#     mi = min(img.view(-1))
+#     ma = max(img.view(-1))
+#     img = (img-mi)/(ma-mi)
+#     img = img*256
+#     img = img.permute(1, 2, 0)
+#     img = img.numpy()
+#     img = Image.fromarray(img.astype(np.uint8))
+#     img.save('aaa.jpg')
+#     img = dataset[0]['vdo']
+#     mi = min(img.view(-1))
+#     ma = max(img.view(-1))
+#     img = (img-mi)/(ma-mi)
+#     img = img*256
+#     img = img.permute(1, 2, 0)
+#     img = img.numpy()
+#     img = Image.fromarray(img.astype(np.uint8))
+#     img.save('bbb.jpg')
     # mean = np.zeros(3)
     # std = np.zeros(3)
     # for d in tqdm(dataset):

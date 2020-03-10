@@ -2,8 +2,10 @@ import os
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
-from arcface.backbone import Backbone
-from arcface.head import Arcface
+from arcface.resnet import ResNet
+from arcface.googlenet import GoogLeNet
+from arcface.inception_v4 import InceptionV4
+from arcface.inceptionresnet_v2 import InceptionResNetV2
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
@@ -63,9 +65,20 @@ def evaluate(opt):
     opt.batch_size *= 1
     loader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
 
-    model = Backbone(opt)
-    
-    b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
+    if opt.network == 'resnet':
+        model = ResNet(opt)
+        b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers)
+    elif opt.network == 'googlenet':
+        model = GoogLeNet(opt)
+        b_name = opt.network
+    elif opt.network == 'inceptionv4':
+        model = InceptionV4(opt)
+        b_name = opt.network
+    elif opt.network == 'inceptionresnetv2':
+        model = InceptionResNetV2(opt)
+        b_name = opt.network
+    else:
+        raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
     model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
     model.cuda()
@@ -92,8 +105,8 @@ def evaluate(opt):
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
 
-    # rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
-    rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
+    rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
     print(sum(rates)/len(rates), min(rates), max(rates))
     print(acc)
 
@@ -101,7 +114,7 @@ if __name__ == "__main__":
     import torchvision.transforms as transforms
     opt = get_args_arcface()
     evaluate(opt)
-    # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
+    # # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
     # training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
     # opt.num_classes = training_set.num_classes
     # l = os.listdir('data/train_instance')
@@ -130,29 +143,27 @@ if __name__ == "__main__":
     # #     dis.append(hamming_distance(features[0], features[i]))
     # # print(dis)
     # # print(img.size())
-    # model = Backbone(opt)
+    # model = InceptionResNetV2(opt)
     
-    # b_name = 'backbone_'+opt.mode+'_{}'.format(opt.num_layers)
-
+    # b_name = opt.network
     # model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
     # model.cuda()
     # model.eval()
     # img = img.cuda()
     # with torch.no_grad():
-    #     features = model(img).cpu().numpy()
-    # # from arcface.head import Arcface
-    # # opt.m = 0
-    # # h = Arcface(opt)
-    # # h_name = 'arcface_'+opt.mode+'_{}'.format(opt.num_layers)
-    # # h.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
-    # # h.cuda()
-    # # # h.eval()
-    
-    # # o = h([features, torch.zeros(17).long()]).cpu()
-    # # o = torch.argmax(o, dim=1)
-    # # print(o)
-    # # # print(ll)
-    # print(kmeans.predict(features))
+    #     features = model(img)
+    # from arcface.head import Arcface
+    # opt.m = 0
+    # h = Arcface(opt)
+    # h_name = 'arcface_'+b_name
+    # h.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
+    # h.cuda()
+    # h.eval()
+    # o = h(features).cpu()
+    # o = torch.argmax(o, dim=1)
+    # print(o)
+    # # # # print(ll)
+    # # print(kmeans.predict(features))
 
 
 

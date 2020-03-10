@@ -22,6 +22,8 @@ class Arcface(nn.Module):
         self.sin_m = math.sin(m)
         self.mm = self.sin_m * m  # issue 1
         self.threshold = math.cos(math.pi - m)
+
+
     def forward(self, inputs):
         if self.training:
             embbedings, label = inputs
@@ -32,7 +34,7 @@ class Arcface(nn.Module):
         nB = len(embbedings)
         kernel_norm = l2_norm(self.kernel,axis=0)
         # cos(theta+m)
-        cos_theta = torch.mm(embbedings,kernel_norm)
+        cos_theta = torch.mm(embbedings, kernel_norm)
 #         output = torch.mm(embbedings,kernel_norm)
         cos_theta = cos_theta.clamp(-1,1) # for numerical stability
         cos_theta_2 = torch.pow(cos_theta, 2)
@@ -68,11 +70,3 @@ class LinearLayer(nn.Module):
     def forward(self, embbedings, label):
         output = self.fc(embbedings)
         return output
-
-if __name__ == "__main__":
-    head = Arcface()
-    a = torch.randn([5, 512])
-    c = torch.Tensor([1,2,3,4,5]).long()
-
-    b = head(a, c)
-    print(b.size())

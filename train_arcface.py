@@ -7,6 +7,8 @@ import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 from arcface.resnet import ResNet
 from arcface.googlenet import GoogLeNet
+from arcface.inception_v4 import InceptionV4
+from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
@@ -37,6 +39,14 @@ def train(opt):
         h_name = 'arcface_'+b_name
     elif opt.network == 'googlenet':
         backbone = GoogLeNet(opt)
+        b_name = opt.network
+        h_name = 'arcface_'+b_name
+    elif opt.network == 'inceptionv4':
+        backbone = InceptionV4(opt)
+        b_name = opt.network
+        h_name = 'arcface_'+b_name
+    elif opt.network == 'inceptionresnetv2':
+        backbone = InceptionResNetV2(opt)
         b_name = opt.network
         h_name = 'arcface_'+b_name
     else:
