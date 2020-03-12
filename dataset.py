@@ -33,22 +33,10 @@ class EfficientdetDataset(Dataset):
         else:
             tats = [mode + '_images', mode + '_videos']
 
-        # img_tat = mode + '_images'
-        # vdo_tat = mode + '_videos'
-
         ds = []
         for t in tats:
             with open(os.path.join(root_dir, t+'_annotation.json'), 'r') as f:
                 ds.append(json.load(f))
-
-        # with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
-        #     d_i = json.load(f)
-        # with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
-        #     d_v = json.load(f)
-        
-
-        # l_i = d_i['annotations']
-        # l_v = d_v['annotations']
 
         ls = [d['annotations'] for d in ds]
 
@@ -65,22 +53,7 @@ class EfficientdetDataset(Dataset):
                 t.append(d['img_name'])
                 self.images.append(t)
         # print(len(self.images))
-        # self.images = self.images[:2000]
-        # for d in l_i:
-        #     if len(d['annotations']) == 0:
-        #         continue
-        #     t = []
-        #     t.append(os.path.join(img_tat, d['img_name']))
-        #     t.append(d['annotations'])
-        #     self.images.append(t)
-            
-        # for d in l_v:
-        #     if len(d['annotations']) == 0:
-        #         continue
-        #     t = []
-        #     t.append(os.path.join(vdo_tat, d['img_name']))
-        #     t.append(d['annotations'])
-        #     self.images.append(t)
+        # self.images = self.images[:1000]
         print('Done')
 
     def __len__(self):
@@ -438,7 +411,7 @@ class ValidationDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, index):
-        frame, imgID, imgPath, xmin, ymin, xmax, ymax = self.items[index]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index]
         if imgPath != self.imgPath:
             self.imgPath = imgPath
             self.img = cv2.imread(os.path.join(self.root_dir, imgPath))
@@ -455,8 +428,13 @@ class ValidationDataset(Dataset):
         det = det.permute(2, 0, 1)
 
         det = transform(det)
-
-        return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
+        # print(classes)
+        return {
+            'img': det, 
+            'imgID': imgID, 
+            'frame': frame, 
+            'box': np.array([xmin, ymin, xmax, ymax]),
+            'classes': classes}
 
 '''
     for test
@@ -488,7 +466,7 @@ class TestImageDataset(Dataset):
                     self.images.append(os.path.join(di, 'image', img_dir, img_name))
                     self.frames.append(img_name.split('.')[0])
                     self.ids.append(img_dir)
-        # self.images = self.images[:1000]
+        self.images = self.images[:1000]
 
     def __len__(self):
         return len(self.images)
@@ -536,7 +514,7 @@ class TestVideoDataset(Dataset):
             for vdo_name in vdo_names:
                 self.videos.append(os.path.join(di, 'video', vdo_name))
                 self.ids.append(vdo_name.split('.')[0])
-        # self.videos = self.videos[:100]
+        self.videos = self.videos[:100]
 
     def __len__(self):
         return len(self.videos)*self.n
@@ -584,7 +562,7 @@ class TestDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, index):
-        frame, imgID, imgPath, xmin, ymin, xmax, ymax = self.items[index]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index]
         if self.mode == 'image':
             img = cv2.imread(imgPath)
         else:
@@ -611,7 +589,12 @@ class TestDataset(Dataset):
 
         det = transform(det)
 
-        return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
+        return {
+            'img': det, 
+            'imgID': imgID, 
+            'frame': frame, 
+            'box': np.array([xmin, ymin, xmax, ymax]),
+            'classes': classes}
 
 
 if __name__ == "__main__":

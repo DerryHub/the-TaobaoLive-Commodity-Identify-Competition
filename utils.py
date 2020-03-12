@@ -87,10 +87,10 @@ class Normalizer(object):
         return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots}
 
 def iou(a, b):
-    a = torch.clamp(a.long(), 0, 511)
-    b = torch.clamp(b.long(), 0, 511)
-    img_a = torch.zeros([512, 512])
-    img_b = torch.zeros([512, 512])
+    a = torch.clamp(a.long(), 0, 2000)
+    b = torch.clamp(b.long(), 0, 2000)
+    img_a = torch.zeros([2000, 2000])
+    img_b = torch.zeros([2000, 2000])
     for t in a:
         img_a[t[0]:t[2], t[1]:t[3]] = 1
     for t in b:

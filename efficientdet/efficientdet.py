@@ -272,7 +272,7 @@ class EfficientDet(nn.Module):
             for i in range(batch_size):
 
                 if scores_over_thresh[i, :].sum() == 0:
-                    output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 4)])
+                    output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 23), torch.zeros(0, 4)])
                     continue
 
                 classification_i = classification[:, scores_over_thresh[i], :]
@@ -282,8 +282,8 @@ class EfficientDet(nn.Module):
                 anchors_nms_idx = nms(torch.cat([transformed_anchors_i, scores_i], dim=2)[i, :, :], self.nms_threshold)
                 
                 nms_scores, nms_class = classification_i[i, anchors_nms_idx, :].max(dim=1)
-                output_list.append([nms_scores, nms_class, transformed_anchors_i[i, anchors_nms_idx, :]])
-
+                output_list.append([nms_scores, nms_class, classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
+                # print(classification_i[i, anchors_nms_idx, :].size(), nms_class.size())
             return output_list
 
 

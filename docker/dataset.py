@@ -134,7 +134,7 @@ class TestDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, index):
-        frame, imgID, imgPath, xmin, ymin, xmax, ymax = self.items[index]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index]
         if self.mode == 'image':
             img = cv2.imread(imgPath)
         else:
@@ -161,5 +161,9 @@ class TestDataset(Dataset):
 
         det = transform(det)
 
-        return {'img': det, 'imgID': imgID, 'frame': frame, 'box': np.array([xmin, ymin, xmax, ymax])}
-
+        return {
+            'img': det, 
+            'imgID': imgID, 
+            'frame': frame, 
+            'box': np.array([xmin, ymin, xmax, ymax]),
+            'classes': classes}

@@ -54,11 +54,13 @@ def test(opt):
         
         for j, output in enumerate(output_list):
             imgPath = test_set.getImagePath(i*opt.batch_size+j)
-            scores, labels, boxes = output
+            scores, labels, all_labels, boxes = output
             annot = data['annot'][j]
             annot = annot[annot[:, 4]!=-1]
-
-            cat = torch.cat([scores.view(-1, 1), labels.view(-1, 1).float(), boxes], dim=1)
+            # print(labels, torch.argsort(-all_labels, dim=1))
+            top5_label = torch.argsort(-all_labels, dim=1)[:, :5]
+            cat = torch.cat([scores.view(-1, 1), top5_label.float(), boxes], dim=1).cpu()
+            # print(cat.size())
             cat = cat[cat[:, 0]>=opt.cls_threshold]
             # print(scores.size(), labels.size(), boxes.size(), annot.size())
             if calIOU:
@@ -93,10 +95,12 @@ def test(opt):
                 N_GT += annot.size(0)
                 for pre in cat:
                     for gt in annot:
-                        s = iou(pre[2:].unsqueeze(0), gt[:4].unsqueeze(0))
+                        s = iou(pre[-4:].unsqueeze(0), gt[:4].unsqueeze(0))
                         if s > 0.5:
                             N_TP_iou += 1
-                            if pre[1] == gt[-1]:
+                            # if pre[1] == gt[-1]:
+                            #     N_TP += 1
+                            if gt[-1] in pre[1:6]:
                                 N_TP += 1
             
 

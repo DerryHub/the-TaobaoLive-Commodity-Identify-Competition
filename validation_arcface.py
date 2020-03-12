@@ -24,7 +24,8 @@ def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
 
     acc = 0
     miss = 0
-    rates = []
+    rates_t = []
+    rates_f = []
     for i, vc in enumerate(tqdm(vdo_cls)):
         l = []
         arg = np.argwhere(img_cls==vc).reshape(-1)
@@ -38,9 +39,11 @@ def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
         m = max(l, key=lambda x: x[1])
         if m[0] == i:
             acc += 1
-        rates.append(m[1])
+            rates_t.append(m[1])
+        else:
+            rates_f.append(m[1])
     print(miss/len(vdo_cls))
-    return rates, acc/len(vdo_cls)
+    return rates_t, rates_f, acc/len(vdo_cls)
 
 
 def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
@@ -48,16 +51,19 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
     cos = cosine_similarity(vdo_features, img_features)
     argmax = np.argsort(-cos, axis=1)
     acc = 0
-    rates = []
+    rates_t = []
+    rates_f = []
     for i in tqdm(range(len(cos))):
         for j in argmax[i]:
             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
                 continue
             if j == i:
                 acc +=1
-            rates.append(cos[i, j])
+                rates_t.append(cos[i, j])
+            else:
+                rates_f.append(cos[i, j])
             break
-    return rates, acc/len(cos)
+    return rates_t, rates_f, acc/len(cos)
     
 
 def evaluate(opt):
@@ -105,9 +111,10 @@ def evaluate(opt):
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
 
-    rates, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
     # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
-    print(sum(rates)/len(rates), min(rates), max(rates))
+    print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
+    print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
     print(acc)
 
 if __name__ == "__main__":
