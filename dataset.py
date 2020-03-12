@@ -168,6 +168,10 @@ class ArcfaceDataset(Dataset):
         # self.images = self.images[:10000]
         print('Done')
 
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+
     def __len__(self):
         return len(self.images)
 
@@ -188,10 +192,8 @@ class ArcfaceDataset(Dataset):
             img = img[:, ::-1, :].copy()
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
-        transform = transforms.Normalize(
-            mean=[0.55574415, 0.51230767, 0.51123354], 
-            std=[0.21303795, 0.21604613, 0.21273348])
-        img = transform(img)
+        
+        img = self.transform(img)
 
         return {'img':img, 'label':label}
 
@@ -397,6 +399,9 @@ class ClassifierDataset(Dataset):
 
         self.num_classes = len(instance2label)
         print('Done')
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
     
     def __len__(self):
         return len(self.images)
@@ -420,10 +425,8 @@ class ClassifierDataset(Dataset):
 
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
-        transform = transforms.Normalize(
-            mean=[0.55574415, 0.51230767, 0.51123354], 
-            std=[0.21303795, 0.21604613, 0.21273348])
-        img = transform(img)
+        
+        img = self.transform(img)
 
         return {'img':img, 'label':label}
 
@@ -456,6 +459,10 @@ class ValidationArcfaceDataset(Dataset):
                 continue
             l.append(instance)
             self.items.append(l)
+
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
     
     def __len__(self):
         return len(self.items)
@@ -476,17 +483,13 @@ class ValidationArcfaceDataset(Dataset):
         rw = (wv-self.size[1])//2
         vdo = vdo[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
-        transform = transforms.Normalize(
-            mean=[0.55574415, 0.51230767, 0.51123354], 
-            std=[0.21303795, 0.21604613, 0.21273348])
-
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
         vdo = torch.from_numpy(vdo)
         vdo = vdo.permute(2, 0, 1)
 
-        img = transform(img)
-        vdo = transform(vdo)
+        img = self.transform(img)
+        vdo = self.transform(vdo)
 
         return {'img': img, 'vdo': vdo, 'instance':instance}
 
@@ -498,6 +501,10 @@ class ValidationDataset(Dataset):
         self.imgPath = None
         self.img = None
         self.items = items
+
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
 
     def __len__(self):
         return len(self.items)
@@ -511,15 +518,11 @@ class ValidationDataset(Dataset):
         det = cv2.resize(det, self.size)
         det = cv2.cvtColor(det, cv2.COLOR_BGR2RGB)
         det = det.astype(np.float32) / 255
-
-        transform = transforms.Normalize(
-            mean=[0.55574415, 0.51230767, 0.51123354], 
-            std=[0.21303795, 0.21604613, 0.21273348])
         
         det = torch.from_numpy(det)
         det = det.permute(2, 0, 1)
 
-        det = transform(det)
+        det = self.transform(det)
         # print(classes)
         return {
             'img': det, 
@@ -558,7 +561,7 @@ class TestImageDataset(Dataset):
                     self.images.append(os.path.join(di, 'image', img_dir, img_name))
                     self.frames.append(img_name.split('.')[0])
                     self.ids.append(img_dir)
-        self.images = self.images[:1000]
+        # self.images = self.images[:1000]
 
     def __len__(self):
         return len(self.images)
@@ -606,7 +609,7 @@ class TestVideoDataset(Dataset):
             for vdo_name in vdo_names:
                 self.videos.append(os.path.join(di, 'video', vdo_name))
                 self.ids.append(vdo_name.split('.')[0])
-        self.videos = self.videos[:100]
+        # self.videos = self.videos[:100]
 
     def __len__(self):
         return len(self.videos)*self.n
@@ -618,12 +621,6 @@ class TestVideoDataset(Dataset):
         cap = cv2.VideoCapture(vdo_name)
         cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
         ret, img = cap.read()
-        # frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        # for i in range(int(frames)):
-        #     ret, frame = cap.read()
-        #     if i == f_index:
-        #         img = frame
-        #         break
         cap.release()
         
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -650,6 +647,10 @@ class TestDataset(Dataset):
         self.root_dir = root_dir
         self.items = items
 
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+
     def __len__(self):
         return len(self.items)
 
@@ -661,25 +662,16 @@ class TestDataset(Dataset):
             cap = cv2.VideoCapture(imgPath)
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
             ret, img = cap.read()
-            # frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-            # for i in range(int(frames)):
-            #     ret, img = cap.read()
-            #     if i == int(frame):
-            #         break
             cap.release()
         det = img[ymin:ymax, xmin:xmax, :].copy()
         det = cv2.resize(det, self.size)
         det = cv2.cvtColor(det, cv2.COLOR_BGR2RGB)
         det = det.astype(np.float32) / 255
 
-        transform = transforms.Normalize(
-            mean=[0.55574415, 0.51230767, 0.51123354], 
-            std=[0.21303795, 0.21604613, 0.21273348])
-        
         det = torch.from_numpy(det)
         det = det.permute(2, 0, 1)
 
-        det = transform(det)
+        det = self.transform(det)
 
         return {
             'img': det, 
