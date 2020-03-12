@@ -145,3 +145,42 @@ def collater_test(data):
     imgs = imgs.permute(0, 3, 1, 2)
 
     return {'img': imgs, 'scale': scales}
+
+class TripletLoss():
+    def __init__(self, alpha, gamma):
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def __call__(self, feature_q, feature_p, feature_n):
+        distance_p = self.distance(feature_q, feature_p)
+        loss_p = torch.mean(-torch.log(1-distance_p+1e-8)*(distance_p**self.gamma)*self.alpha)
+        distance_n = self.distance(feature_q, feature_n)
+        loss_n = torch.mean(-torch.log(distance_n+1e-8)*((1-distance_n)**self.gamma)*(1-self.alpha))
+        return loss_p + loss_n
+
+    def distance(self, f_1, f_2):
+        distance = torch.sum((f_1-f_2)**2, dim=1) / 4
+        # distance = torch.mean(distance)
+        return distance
+    
+class TripletAccuracy():
+    def __call__(self, feature_q, feature_p, feature_n):
+        distance_p = self.distance(feature_q, feature_p)
+        distance_n = self.distance(feature_q, feature_n)
+        total_p = distance_p.size(0) 
+        total_n = distance_n.size(0)
+        acc_p = torch.sum(distance_p < 0.5).float()
+        acc_n = torch.sum(distance_n > 0.5).float()
+        return acc_p, acc_n, total_p, total_n
+
+    def distance(self, f_1, f_2):
+        distance = torch.sum((f_1-f_2)**2, dim=1) / 4
+        return distance
+
+
+if __name__ == "__main__":
+    cost = TripletLoss(0.25, 1.5)
+    a = torch.tensor([[1,0.],[0.8,0.6]])
+    b = torch.tensor([[1,0.],[0.8,0.6]])
+    c = torch.tensor([[-1,0], [1,0]])
+    print(cost(a,b,c))

@@ -135,7 +135,7 @@ class ArcfaceDataset(Dataset):
                     else:
                         instance[dd['instance_id']] += 1
                     t = []
-                    t.append(img_tat+str(dd['instance_id'])+d['img_name'])
+                    t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
                     images.append(t)
 
@@ -148,7 +148,7 @@ class ArcfaceDataset(Dataset):
                     else:
                         instance[dd['instance_id']] += 1
                     t = []
-                    t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
+                    t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
                     images.append(t)
 
@@ -180,22 +180,6 @@ class ArcfaceDataset(Dataset):
         rh = random.randint(0, h-self.size[0])
         rw = random.randint(0, w-self.size[1])
 
-        # if h == 128:
-        #     rh = random.randint(0, h-self.size[0])
-        #     rw = random.randint(0, w-self.size[0]*w//h)
-        #     img = img[rh:self.size[0]+rh, rw:self.size[0]*w//h+rw, :]
-        #     common_h = self.size[0]
-        #     common_w = self.size[0]*w//h
-        # elif w == 128:
-        #     rh = random.randint(0, h-self.size[1]*h//w)
-        #     rw = random.randint(0, w-self.size[1])
-        #     img = img[rh:self.size[1]*h//w+rh, rw:self.size[1]+rw, :]
-        #     common_h = self.size[1]*h//w
-        #     common_w = self.size[1]
-        # else:
-        #     raise RuntimeError('shape error')
-
-
         img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
         label = torch.tensor(self.clsDic[instance_id])
@@ -209,10 +193,151 @@ class ArcfaceDataset(Dataset):
             std=[0.21303795, 0.21604613, 0.21273348])
         img = transform(img)
 
-        # img_o = torch.zeros(3, self.size[0], self.size[1])
-        # img_o[:, :common_h, :common_w] = img
-
         return {'img':img, 'label':label}
+
+class TripletDataset(Dataset):
+    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5):
+        assert mode in ['train']
+
+        self.root_dir = root_dir
+        self.size = size
+        self.flip_x = flip_x
+
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
+        savePath = mode + '_instance'
+        self.savePath = os.path.join(root_dir, savePath)
+
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
+        
+        with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
+            instance2label = json.load(f)
+
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
+
+        images = []
+
+        instance = {}
+        s_i = set([])
+        s_v = set([])
+
+        self.clsDic = {}
+
+        print('Loading data...')
+        for d in l_i:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    s_i.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
+                    else:
+                        instance[dd['instance_id']] += 1
+                    t = []
+                    t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
+                    t.append(dd['instance_id'])
+                    t.append(instance2label[str(dd['instance_id'])])
+                    images.append(t)
+
+        for d in l_v:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    s_v.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
+                    else:
+                        instance[dd['instance_id']] += 1
+                    t = []
+                    t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
+                    t.append(dd['instance_id'])
+                    t.append(instance2label[str(dd['instance_id'])])
+                    images.append(t)
+
+        id_set = s_i & s_v
+        all_ids = set([])
+
+        self.images = []
+        for l in images:
+            if l[1] in id_set and instance[l[1]] > 10 and instance[l[1]] < 20:
+                self.images.append(l)
+                all_ids.add(l[-1])
+
+        # self.images = self.images[:10000]
+
+        self.cls_ins_dic = {}
+        for i, l in enumerate(self.images):
+            imgName, instance_id, label = l
+            if label not in self.cls_ins_dic:
+                self.cls_ins_dic[label] = {}
+            if instance_id not in self.cls_ins_dic[label]:
+                self.cls_ins_dic[label][instance_id] = []
+            self.cls_ins_dic[label][instance_id].append(i)
+        
+        for k in self.cls_ins_dic.keys():
+            if len(self.cls_ins_dic[k]) < 2:
+                raise RuntimeError('size of self.cls_ins_dic[k] must be larger than 1')
+        print('Done')
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        imgName_q, instance_id_q, label_q = self.images[index]
+        p_index = index
+        while p_index == index:
+            p_index = random.choice(self.cls_ins_dic[label_q][instance_id_q])
+        instance_id_n = instance_id_q
+        while instance_id_n == instance_id_q:
+            instance_id_n = random.choice(list(self.cls_ins_dic[label_q].keys()))
+        n_index = random.choice(self.cls_ins_dic[label_q][instance_id_n])
+        imgName_p, instance_id_p, label_p = self.images[p_index]
+        imgName_n, instance_id_n, label_n = self.images[n_index]
+
+        assert len(set([label_q, label_p, label_n])) == 1
+        assert len(set([instance_id_q, instance_id_p])) == 1
+
+        img_q = np.load(os.path.join(self.savePath, imgName_q)[:-4]+'.npy')
+        img_p = np.load(os.path.join(self.savePath, imgName_p)[:-4]+'.npy')
+        img_n = np.load(os.path.join(self.savePath, imgName_n)[:-4]+'.npy')
+
+        hq, wq, cq = img_q.shape
+        hp, wp, cp = img_p.shape
+        hn, wn, cn = img_n.shape
+
+        rh = random.randint(0, hq-self.size[0])
+        rw = random.randint(0, wq-self.size[1])
+        img_q = img_q[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+        rh = random.randint(0, hp-self.size[0])
+        rw = random.randint(0, wp-self.size[1])
+        img_p = img_p[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+        rh = random.randint(0, hn-self.size[0])
+        rw = random.randint(0, wn-self.size[1])
+        img_n = img_n[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+        if np.random.rand() < self.flip_x:
+            img_q = img_q[:, ::-1, :].copy()
+        if np.random.rand() < self.flip_x:
+            img_p = img_p[:, ::-1, :].copy()
+        if np.random.rand() < self.flip_x:
+            img_n = img_n[:, ::-1, :].copy()
+        
+        img_q = torch.from_numpy(img_q).permute(2, 0, 1)
+        img_p = torch.from_numpy(img_p).permute(2, 0, 1)
+        img_n = torch.from_numpy(img_n).permute(2, 0, 1)
+
+        img_q = self.transform(img_q)
+        img_p = self.transform(img_p)
+        img_n = self.transform(img_n)
+
+        return {'img_q':img_q, 'img_p':img_p, 'img_n':img_n}
 
 '''
     for classify
@@ -331,34 +456,6 @@ class ValidationArcfaceDataset(Dataset):
                 continue
             l.append(instance)
             self.items.append(l)
-        
-    # def resize(self, src, new_size):
-    #     dst_w, dst_h = new_size # 目标图像宽高
-    #     src_h, src_w = src.shape[:2] # 源图像宽高
-    #     if src_h == dst_h and src_w == dst_w:
-    #         return src.copy()
-    #     scale_x = float(src_w) / dst_w # x缩放比例
-    #     scale_y = float(src_h) / dst_h # y缩放比例
-
-    #     # 遍历目标图像，插值
-    #     dst = np.zeros((dst_h, dst_w, 3))
-    #     for n in range(3): # 对channel循环
-    #         for dst_y in range(dst_h): # 对height循环
-    #             for dst_x in range(dst_w): # 对width循环
-    #                 # 目标在源上的坐标
-    #                 src_x = (dst_x + 0.5) * scale_x - 0.5
-    #                 src_y = (dst_y + 0.5) * scale_y - 0.5
-    #                 # 计算在源图上四个近邻点的位置
-    #                 src_x_0 = int(np.floor(src_x))
-    #                 src_y_0 = int(np.floor(src_y))
-    #                 src_x_1 = min(src_x_0 + 1, src_w - 1)
-    #                 src_y_1 = min(src_y_0 + 1, src_h - 1)
-
-    #                 # 双线性插值
-    #                 value0 = (src_x_1 - src_x) * src[src_y_0, src_x_0, n] + (src_x - src_x_0) * src[src_y_0, src_x_1, n]
-    #                 value1 = (src_x_1 - src_x) * src[src_y_1, src_x_0, n] + (src_x - src_x_0) * src[src_y_1, src_x_1, n]
-    #                 dst[dst_y, dst_x, n] = float((src_y_1 - src_y) * value0 + (src_y - src_y_0) * value1)
-    #     return dst
     
     def __len__(self):
         return len(self.items)
@@ -371,12 +468,13 @@ class ValidationArcfaceDataset(Dataset):
         hi, wi, ci = img.shape
         hv, wv, cv = vdo.shape
 
-        assert max(hi, wi) == 112
-        assert max(hv, wv) == 112
-        # assert (hi, wi, ci) == (hv, wv, cv)
-        # if self.size != (hi, wi):
-        #     img = self.resize(img, self.size)
-        #     vdo = self.resize(vdo, self.size)
+        rh = (hi-self.size[0])//2
+        rw = (wi-self.size[1])//2
+        img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+        rh = (hv-self.size[0])//2
+        rw = (wv-self.size[1])//2
+        vdo = vdo[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
         transform = transforms.Normalize(
             mean=[0.55574415, 0.51230767, 0.51123354], 
@@ -390,13 +488,7 @@ class ValidationArcfaceDataset(Dataset):
         img = transform(img)
         vdo = transform(vdo)
 
-        img_o = torch.zeros(3, self.size[0], self.size[1])
-        img_o[:, :hi, :wi] = img
-
-        vdo_o = torch.zeros(3, self.size[0], self.size[1])
-        vdo_o[:, :hv, :wv] = vdo
-
-        return {'img': img_o, 'vdo': vdo_o, 'instance':instance}
+        return {'img': img, 'vdo': vdo, 'instance':instance}
 
 
 class ValidationDataset(Dataset):
@@ -599,10 +691,11 @@ class TestDataset(Dataset):
 
 if __name__ == "__main__":
 #     from PIL import Image
-    dataset = TestImageDataset()
+    dataset = TripletDataset()
     # print(dataset[0])
-    for d in tqdm(dataset):
-        pass
+    print(len(dataset))
+    # for d in tqdm(dataset):
+    #     pass
 #     img = dataset[0]['img']
 #     mi = min(img.view(-1))
 #     ma = max(img.view(-1))

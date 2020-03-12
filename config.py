@@ -33,8 +33,8 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=112, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=64, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--batch_size", type=int, default=30, help="The number of images per batch")
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
@@ -46,6 +46,8 @@ def get_args_arcface():
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
     parser.add_argument("--m", type=float, default=0.5)
+    parser.add_argument('--alpha', type=float, default=0.25)
+    parser.add_argument('--gamma', type=float, default=1.5)
     
     parser.add_argument("--network", type=str, default='resnet', 
                         help="[resnet, googlenet, inceptionv4, inceptionresnetv2]")
