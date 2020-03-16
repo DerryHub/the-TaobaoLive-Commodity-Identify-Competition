@@ -113,8 +113,8 @@ def train(opt):
             acc += (torch.argmax(output, dim=1)==label).sum().float()
 
             loss = cost(output, label)
-            loss_head = torch.sum(torch.sum(l2_norm(head.module.kernel, axis=0), dim=1)**2)
-
+            # loss_head = torch.sum(torch.sum(l2_norm(head.module.kernel, axis=0), dim=1)**2)
+            loss_head = 0
             loss_all = loss
             loss_all.backward()
             optimizer.step()
