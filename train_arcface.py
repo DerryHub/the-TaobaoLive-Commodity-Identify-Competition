@@ -27,7 +27,7 @@ def train(opt):
 
     training_params = {"batch_size": opt.batch_size * num_gpus,
                         "shuffle": True,
-                        "drop_last": False,
+                        "drop_last": True,
                         "num_workers": opt.workers}
 
     training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))

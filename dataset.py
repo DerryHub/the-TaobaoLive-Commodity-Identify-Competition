@@ -130,7 +130,7 @@ class ArcfaceDataset(Dataset):
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
                     s_i.add(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
-                    if dd['instance_id'] not in instance:
+                    if str(dd['instance_id'])+'_'+str(dd['viewpoint']) not in instance:
                         instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] = 1
                     else:
                         instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] += 1
@@ -143,7 +143,7 @@ class ArcfaceDataset(Dataset):
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
                     s_v.add(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
-                    if dd['instance_id'] not in instance:
+                    if str(dd['instance_id'])+'_'+str(dd['viewpoint']) not in instance:
                         instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] = 1
                     else:
                         instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] += 1
@@ -154,7 +154,7 @@ class ArcfaceDataset(Dataset):
 
         id_set = s_i & s_v
         all_ids = set([])
-
+        # print(max(instance.values()))
         self.images = []
         for l in images:
             if l[-1] in id_set and instance[l[-1]] > 10 and instance[l[-1]] < 20:
@@ -165,6 +165,7 @@ class ArcfaceDataset(Dataset):
             self.clsDic[i] = len(self.clsDic)
 
         self.num_classes = len(self.clsDic)
+        
         # self.images = self.images[:10000]
         print('Done')
 
