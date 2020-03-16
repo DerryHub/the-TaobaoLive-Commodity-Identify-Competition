@@ -161,10 +161,14 @@ class ArcfaceDataset(Dataset):
                 self.images.append(l)
                 all_ids.add(l[-1])
         
+        all_ids = sorted(list(all_ids))
+
         for i in all_ids:
             self.clsDic[i] = len(self.clsDic)
 
         self.num_classes = len(self.clsDic)
+
+        # print(sorted(self.clsDic.items(), key=lambda x:x[1])[0])
         
         # self.images = self.images[:10000]
         print('Done')
