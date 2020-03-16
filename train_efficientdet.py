@@ -5,7 +5,7 @@ import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from dataset import EfficientdetDataset
-from utils import Resizer, Normalizer, Augmenter, collater
+from utils import Resizer, Normalizer, Augmenter, collater, AdamW
 from efficientdet.efficientdet import EfficientDet
 import numpy as np
 from tqdm import tqdm
@@ -55,7 +55,7 @@ def train(opt):
     model.to(device)
     model = nn.DataParallel(model, device_ids=device_ids)
 
-    optimizer = torch.optim.AdamW(model.parameters(), opt.lr)
+    optimizer = AdamW(model.parameters(), opt.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
     best_loss = np.inf

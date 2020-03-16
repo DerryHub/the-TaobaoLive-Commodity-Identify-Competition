@@ -13,7 +13,7 @@ from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
-from utils import separate_bn_paras
+from utils import separate_bn_paras, AdamW
 import numpy as np
 
 def train(opt):
@@ -81,7 +81,7 @@ def train(opt):
     head.to(device)
     head = nn.DataParallel(head, device_ids=device_ids)
 
-    optimizer = torch.optim.AdamW([
+    optimizer = AdamW([
                 {'params': backbone.parameters()},
                 {'params': head.parameters()}
             ], opt.lr)
