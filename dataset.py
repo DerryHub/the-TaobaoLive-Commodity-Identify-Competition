@@ -129,27 +129,27 @@ class ArcfaceDataset(Dataset):
         for d in l_i:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
-                    s_i.add(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
-                    if str(dd['instance_id'])+'_'+str(dd['viewpoint']) not in instance:
-                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] = 1
+                    s_i.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
                     else:
-                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] += 1
+                        instance[dd['instance_id']] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
+                    t.append(dd['instance_id'])
                     images.append(t)
 
         for d in l_v:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
-                    s_v.add(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
-                    if str(dd['instance_id'])+'_'+str(dd['viewpoint']) not in instance:
-                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] = 1
+                    s_v.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
                     else:
-                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] += 1
+                        instance[dd['instance_id']] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
+                    t.append(dd['instance_id'])
                     images.append(t)
 
         id_set = s_i & s_v
@@ -356,7 +356,8 @@ class ValidationArcfaceDataset(Dataset):
         self.size = size
         instances = os.listdir(root_dir)
         self.items = []
-        for instance in instances:
+        print('Loading Data...')
+        for instance in tqdm(instances):
             imgs = os.listdir(root_dir+instance)
             if len(imgs) < 2:
                 continue
@@ -375,7 +376,7 @@ class ValidationArcfaceDataset(Dataset):
                 continue
             l.append(instance)
             self.items.append(l)
-
+        print('Done')
         self.transform = transforms.Normalize(
             mean=[0.55574415, 0.51230767, 0.51123354], 
             std=[0.21303795, 0.21604613, 0.21273348])
