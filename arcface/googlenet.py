@@ -72,7 +72,7 @@ class GoogLeNet(nn.Module):
         x = self.maxpool4(x)
         x = self.inception5a(x)
         x = self.inception5b(x)
-
+        
         x = self.output_layer(x)
         return l2_norm(x)
 

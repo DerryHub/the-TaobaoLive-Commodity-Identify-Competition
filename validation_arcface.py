@@ -64,7 +64,8 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
                 rates_f.append(cos[i, j])
             break
     return rates_t, rates_f, acc/len(cos)
-    
+
+
 
 def evaluate(opt):
     dataset = ValidationArcfaceDataset(root_dir='data/validation_instance/', size=(opt.size, opt.size))

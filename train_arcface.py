@@ -13,12 +13,13 @@ from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
+from utils import separate_bn_paras
 import numpy as np
 
 def train(opt):
-    num_gpus = 1
+    device_ids = opt.GPUs
     if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
+        num_gpus = len(device_ids)
     else:
         raise Exception('no GPU')
 
@@ -72,11 +73,13 @@ def train(opt):
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
     
-    backbone = backbone.cuda()
-    backbone = nn.DataParallel(backbone)
+    device = torch.device("cuda:{}".format(device_ids[0]))
 
-    head = head.cuda()
-    head = nn.DataParallel(head)
+    backbone.to(device)
+    backbone = nn.DataParallel(backbone, device_ids=device_ids)
+
+    head.to(device)
+    head = nn.DataParallel(head, device_ids=device_ids)
 
     optimizer = torch.optim.AdamW([
                 {'params': backbone.parameters()},

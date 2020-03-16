@@ -12,13 +12,13 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from dataset import TripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
-from utils import TripletLoss, TripletAccuracy
+from utils import TripletLoss, TripletAccuracy, AdamW
 import numpy as np
 
 def train(opt):
-    num_gpus = 1
+    device_ids = opt.GPUs
     if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
+        num_gpus = len(device_ids)
     else:
         raise Exception('no GPU')
 
@@ -56,10 +56,12 @@ def train(opt):
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
     
-    backbone = backbone.cuda()
+    device = torch.device("cuda:{}".format(device_ids[0]))
+
+    backbone.to(device)
     backbone = nn.DataParallel(backbone)
 
-    optimizer = torch.optim.AdamW([
+    optimizer = AdamW([
                 {'params': backbone.parameters()}
             ], opt.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
@@ -119,4 +121,4 @@ def train(opt):
 if __name__ == "__main__":
     opt = get_args_arcface()
     train(opt)
-
+    

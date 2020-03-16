@@ -129,27 +129,27 @@ class ArcfaceDataset(Dataset):
         for d in l_i:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
-                    s_i.add(dd['instance_id'])
+                    s_i.add(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
                     if dd['instance_id'] not in instance:
-                        instance[dd['instance_id']] = 1
+                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] = 1
                     else:
-                        instance[dd['instance_id']] += 1
+                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(dd['instance_id'])
+                    t.append(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
                     images.append(t)
 
         for d in l_v:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0:
-                    s_v.add(dd['instance_id'])
+                    s_v.add(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
                     if dd['instance_id'] not in instance:
-                        instance[dd['instance_id']] = 1
+                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] = 1
                     else:
-                        instance[dd['instance_id']] += 1
+                        instance[str(dd['instance_id'])+'_'+str(dd['viewpoint'])] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(dd['instance_id'])
+                    t.append(str(dd['instance_id'])+'_'+str(dd['viewpoint']))
                     images.append(t)
 
         id_set = s_i & s_v
@@ -340,95 +340,6 @@ class TripletDataset(Dataset):
         img_n = self.transform(img_n)
 
         return {'img_q':img_q, 'img_p':img_p, 'img_n':img_n}
-
-'''
-    for classify
-'''
-
-class ClassifierDataset(Dataset):
-    def __init__(self, size=(112, 112), root_dir='data', mode='train', flip_x=0.5):
-        assert mode in ['train', 'validation']
-        self.root_dir = root_dir
-        self.size = size
-        self.flip_x = flip_x
-        self.mode = mode
-
-        img_tat = mode + '_images'
-        vdo_tat = mode + '_videos'
-        savePath = mode + '_instance'
-        self.savePath = os.path.join(root_dir, savePath)
-
-        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
-            d_i = json.load(f)
-        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
-            d_v = json.load(f)
-
-        with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
-            instance2label = json.load(f)       
-
-        l_i = d_i['annotations']
-        l_v = d_v['annotations']
-
-        self.images = []
-
-        self.clsDic = {}
-
-        print('Loading data...')
-        for d in l_i:
-            for dd in d['annotations']:
-                if dd['instance_id'] > 0:
-                    t = []
-                    if mode == 'train':
-                        t.append(img_tat+str(dd['instance_id'])+d['img_name'])
-                    else:
-                        t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(instance2label[str(dd['instance_id'])])
-                    self.images.append(t)
-
-        for d in l_v:
-            for dd in d['annotations']:
-                if dd['instance_id'] > 0:
-                    t = []
-                    if mode == 'train':
-                        t.append(vdo_tat+str(dd['instance_id'])+d['img_name'])
-                    else:
-                        t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(instance2label[str(dd['instance_id'])])
-                    self.images.append(t)
-
-
-        self.num_classes = len(instance2label)
-        print('Done')
-        self.transform = transforms.Normalize(
-            mean=[0.55574415, 0.51230767, 0.51123354], 
-            std=[0.21303795, 0.21604613, 0.21273348])
-    
-    def __len__(self):
-        return len(self.images)
-    
-    def __getitem__(self, index):
-        imgName, label = self.images[index]
-        img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
-
-        if self.mode == 'train':
-            h, w, c = img.shape
-
-            rh = random.randint(0, h-self.size[0])
-            rw = random.randint(0, w-self.size[1])
-
-            img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
-
-            if np.random.rand() < self.flip_x:
-                img = img[:, ::-1, :].copy()
-
-        label = torch.tensor(label)
-
-        img = torch.from_numpy(img)
-        img = img.permute(2, 0, 1)
-        
-        img = self.transform(img)
-
-        return {'img':img, 'label':label}
 
 '''
     for validation

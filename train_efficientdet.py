@@ -12,9 +12,9 @@ from tqdm import tqdm
 from config import get_args_efficientdet
 
 def train(opt):
-    num_gpus = 1
+    device_ids = opt.GPUs
     if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
+        num_gpus = len(device_ids)
     else:
         raise Exception('no GPU')
 
@@ -50,13 +50,15 @@ def train(opt):
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
 
-    model = model.cuda()
-    model = nn.DataParallel(model)
+    device = torch.device("cuda:{}".format(device_ids[0]))
+
+    model.to(device)
+    model = nn.DataParallel(model, device_ids=device_ids)
 
     optimizer = torch.optim.AdamW(model.parameters(), opt.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
-    best_loss = 1e5
+    best_loss = np.inf
     best_epoch = 0
     model.train()
 
@@ -73,10 +75,9 @@ def train(opt):
             cls_loss = cls_loss.mean()
             reg_loss = reg_loss.mean()
             loss = cls_loss + reg_loss
-            loss_ = 2*cls_loss + reg_loss
             if loss == 0:
                 continue
-            loss_.backward()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
             optimizer.step()
             epoch_loss.append(float(loss))

@@ -111,7 +111,7 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
     return vdo2img
 
 def test(opt_a, opt_e):
-    k = 10
+    k = 3
     cls_k = 3
     dataset_img = TestImageDataset(
         root_dir=opt_e.data_path,
@@ -240,28 +240,28 @@ def test(opt_a, opt_e):
         for index in img_index:
             img_f = np.append(img_f, img_features[index].reshape(1, opt_a.embedding_size), axis=0)
         cos = cosine_similarity(vdo_f, img_f)
-        l = []
+        # l = []
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
             simis_i = np.argmax(simis)
             if simis[simis_i] < 0:
                 continue
             img_i = img_index[simis_i]
-            l.append([simis[simis_i], img_i, index])
-            # d = {}
-            # d['img_name'] = img_frames[img_i]
-            # d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
-            # d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
-            # result[vdo_id]['result'].append(d)
-        if len(l) == 0:
-            del result[vdo_id]
-            continue
-        l = sorted(l, key=lambda x:x[0], reverse=True)
-        d = {}
-        d['img_name'] = img_frames[l[0][1]]
-        d['item_box'] = list(map(int, img_boxes[l[0][1]].tolist()))
-        d['frame_box'] = list(map(int, vdo_boxes[l[0][2]].tolist()))
-        result[vdo_id]['result'].append(d)
+            # l.append([simis[simis_i], img_i, index])
+            d = {}
+            d['img_name'] = img_frames[img_i]
+            d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
+            d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
+            result[vdo_id]['result'].append(d)
+        # if len(l) == 0:
+        #     del result[vdo_id]
+        #     continue
+        # l = sorted(l, key=lambda x:x[0], reverse=True)
+        # d = {}
+        # d['img_name'] = img_frames[l[0][1]]
+        # d['item_box'] = list(map(int, img_boxes[l[0][1]].tolist()))
+        # d['frame_box'] = list(map(int, vdo_boxes[l[0][2]].tolist()))
+        # result[vdo_id]['result'].append(d)
 
     with open('result.json', 'w') as f:
         json.dump(result, f)
