@@ -243,7 +243,55 @@ def createInstance2Label(root_dir):
     with open(os.path.join(root_dir, 'instance2label.json'), 'w') as f:
         json.dump(ins2labDic, f)
 
+def createInstanceID(root_dir='data'):
+    mode = 'train'
+    img_tat = mode + '_images'
+    vdo_tat = mode + '_videos'
 
+    with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+        d_i = json.load(f)
+    with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+        d_v = json.load(f)
+
+    l_i = d_i['annotations']
+    l_v = d_v['annotations']
+
+    instance = {}
+    s_i = set([])
+    s_v = set([])
+
+    clsDic = {}
+
+    for d in l_i:
+        for dd in d['annotations']:
+            if dd['instance_id'] > 0:
+                s_i.add(dd['instance_id'])
+                if dd['instance_id'] not in instance:
+                    instance[dd['instance_id']] = 1
+                else:
+                    instance[dd['instance_id']] += 1
+
+    for d in l_v:
+        for dd in d['annotations']:
+            if dd['instance_id'] > 0:
+                s_v.add(dd['instance_id'])
+                if dd['instance_id'] not in instance:
+                    instance[dd['instance_id']] = 1
+                else:
+                    instance[dd['instance_id']] += 1
+
+    id_set = s_i & s_v
+    all_ids = set([])
+    
+    for ID in id_set:
+        if instance[ID] > 10 and instance[ID] < 20:
+            all_ids.add(ID)
+
+    for i in all_ids:
+        clsDic[i] = len(clsDic)
+
+    with open(os.path.join(root_dir, 'instanceID.json'), 'w') as f:
+        json.dump(clsDic, f)
 
 if __name__ == "__main__":
 #     label = {}
@@ -251,8 +299,9 @@ if __name__ == "__main__":
 #     label['index2label'] = {}
 #     processTrain(label)
 #     processValidation(label)
-    saveNumpyInstance('data', 'train', (128, 128))
-    saveNumpyInstance('data', 'validation', (128, 128))
+    # saveNumpyInstance('data', 'train', (128, 128))
+    # saveNumpyInstance('data', 'validation', (128, 128))
 #     createInstance2Label('data')
+    createInstanceID()
     
 

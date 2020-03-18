@@ -117,54 +117,56 @@ class ArcfaceDataset(Dataset):
         l_i = d_i['annotations']
         l_v = d_v['annotations']
 
-        images = []
+        self.images = []
 
         instance = {}
         s_i = set([])
         s_v = set([])
 
-        self.clsDic = {}
+        # self.clsDic = {}
+        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+            self.clsDic = json.load(f)
 
         print('Loading data...')
         for d in l_i:
             for dd in d['annotations']:
-                if dd['instance_id'] > 0:
-                    s_i.add(dd['instance_id'])
-                    if dd['instance_id'] not in instance:
-                        instance[dd['instance_id']] = 1
-                    else:
-                        instance[dd['instance_id']] += 1
+                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                    # s_i.add(dd['instance_id'])
+                    # if dd['instance_id'] not in instance:
+                    #     instance[dd['instance_id']] = 1
+                    # else:
+                    #     instance[dd['instance_id']] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
-                    images.append(t)
+                    self.images.append(t)
 
         for d in l_v:
             for dd in d['annotations']:
-                if dd['instance_id'] > 0:
-                    s_v.add(dd['instance_id'])
-                    if dd['instance_id'] not in instance:
-                        instance[dd['instance_id']] = 1
-                    else:
-                        instance[dd['instance_id']] += 1
+                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                    # s_v.add(dd['instance_id'])
+                    # if dd['instance_id'] not in instance:
+                    #     instance[dd['instance_id']] = 1
+                    # else:
+                    #     instance[dd['instance_id']] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
-                    images.append(t)
+                    self.images.append(t)
 
-        id_set = s_i & s_v
-        all_ids = set([])
+        # id_set = s_i & s_v
+        # all_ids = set([])
         # print(max(instance.values()))
-        self.images = []
-        for l in images:
-            if l[-1] in id_set and instance[l[-1]] > 10 and instance[l[-1]] < 20:
-                self.images.append(l)
-                all_ids.add(l[-1])
+        # self.images = []
+        # for l in images:
+        #     if l[-1] in id_set and instance[l[-1]] > 10 and instance[l[-1]] < 20:
+        #         self.images.append(l)
+        #         all_ids.add(l[-1])
         
-        all_ids = sorted(list(all_ids))
+        # all_ids = sorted(list(all_ids))
 
-        for i in all_ids:
-            self.clsDic[i] = len(self.clsDic)
+        # for i in all_ids:
+        #     self.clsDic[i] = len(self.clsDic)
 
         self.num_classes = len(self.clsDic)
 
@@ -191,7 +193,7 @@ class ArcfaceDataset(Dataset):
 
         img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
-        label = torch.tensor(self.clsDic[instance_id])
+        label = torch.tensor(self.clsDic[str(instance_id)])
 
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
@@ -598,22 +600,22 @@ class TestDataset(Dataset):
             'classes': classes}
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 #     from PIL import Image
-    dataset = TripletDataset()
+#     dataset = ArcfaceDataset()
     # print(dataset[0])
-    print(len(dataset))
+    # print(len(dataset))
     # for d in tqdm(dataset):
     #     pass
-#     img = dataset[0]['img']
-#     mi = min(img.view(-1))
-#     ma = max(img.view(-1))
-#     img = (img-mi)/(ma-mi)
-#     img = img*256
-#     img = img.permute(1, 2, 0)
-#     img = img.numpy()
-#     img = Image.fromarray(img.astype(np.uint8))
-#     img.save('aaa.jpg')
+    # img = dataset[100]['img']
+    # mi = min(img.view(-1))
+    # ma = max(img.view(-1))
+    # img = (img-mi)/(ma-mi)
+    # img = img*256
+    # img = img.permute(1, 2, 0)
+    # img = img.numpy()
+    # img = Image.fromarray(img.astype(np.uint8))
+    # img.save('aaa.jpg')
 #     img = dataset[0]['vdo']
 #     mi = min(img.view(-1))
 #     ma = max(img.view(-1))
