@@ -243,8 +243,14 @@ class EfficientDet(nn.Module):
 
         features = self.backbone_net(img_batch)[2:]
         
-        for i, conv in enumerate(self.convs):
-            features[i] = conv(features[i])
+        # for i, conv in enumerate(self.convs):
+        #     features[i] = conv(features[i])
+
+        features[0] = self.conv3(features[0])
+        features[1] = self.conv4(features[1])
+        features[2] = self.conv5(features[2])
+        features[3] = self.conv6(features[3])
+        features[4] = self.conv7(features[4])
 
         features = self.bifpn(features)
         

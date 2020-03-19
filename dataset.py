@@ -119,9 +119,9 @@ class ArcfaceDataset(Dataset):
 
         self.images = []
 
-        instance = {}
-        s_i = set([])
-        s_v = set([])
+        # instance = {}
+        # s_i = set([])
+        # s_v = set([])
 
         # self.clsDic = {}
         with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
