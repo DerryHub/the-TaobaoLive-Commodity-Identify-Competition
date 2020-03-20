@@ -348,6 +348,77 @@ class TripletDataset(Dataset):
 
         return {'img_q':img_q, 'img_p':img_p, 'img_n':img_n}
 
+
+class HTLDataset(Dataset):
+    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, m=3, t=3):
+        assert mode in ['train']
+
+        self.root_dir = root_dir
+        self.size = size
+        self.flip_x = flip_x
+
+        self.m = m
+        self.t = t
+
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
+        savePath = mode + '_instance'
+        self.savePath = os.path.join(root_dir, savePath)
+
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
+
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
+
+        self.images = []
+
+        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+            self.clsDic = json.load(f)
+
+        print('Loading data...')
+        for d in l_i:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                    t = []
+                    t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
+                    t.append(dd['instance_id'])
+                    self.images.append(t)
+
+        for d in l_v:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                    t = []
+                    t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
+                    t.append(dd['instance_id'])
+                    self.images.append(t)
+
+        self.num_classes = len(self.clsDic)
+
+        self.instanceDic = {}
+        for i, path, instance_id in enumerate(self.images):
+            if instance_id not in self.instanceDic:
+                self.instanceDic[instance_id] = []
+            self.instanceDic[instance_id].append(i)
+
+        print('Done')
+
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index, minDic):
+        imgName, instance_id = self.images[index]
+        min_instances = minDic[instance_id][:self.m-1]
+        
+        # anchors = 
+        img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
+
 '''
     for validation
 '''

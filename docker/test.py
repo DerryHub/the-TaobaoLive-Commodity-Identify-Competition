@@ -113,15 +113,12 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
 def test(opt_a, opt_e):
     k = 2
     cls_k = 3
-    dir_list = ['test_dataset_part1', 'test_dataset_part2']
 
     dataset_img = TestImageDataset(
         root_dir=opt_e.data_path,
-        dir_list=dir_list,
         transform=transforms.Compose([Normalizer_Test(), Resizer_Test()]))
     dataset_vdo = TestVideoDataset(
         root_dir=opt_e.data_path,
-        dir_list=dir_list,
         transform=transforms.Compose([Normalizer_Test(), Resizer_Test()]))
 
     opt_e.num_classes = dataset_img.num_classes

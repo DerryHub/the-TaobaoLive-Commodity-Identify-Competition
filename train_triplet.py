@@ -12,7 +12,7 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from dataset import TripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
-from utils import TripletLoss, TripletAccuracy, AdamW
+from utils import TripletLoss, TripletAccuracy, TripletFocalLoss, AdamW
 import numpy as np
 
 def train(opt):
@@ -26,7 +26,7 @@ def train(opt):
 
     training_params = {"batch_size": opt.batch_size * num_gpus,
                         "shuffle": True,
-                        "drop_last": False,
+                        "drop_last": True,
                         "num_workers": opt.workers}
 
     training_set = TripletDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
@@ -66,7 +66,7 @@ def train(opt):
             ], opt.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
-    cost = TripletLoss(opt.alpha, opt.gamma)
+    cost = TripletLoss(opt.alpha, opt.gamma, opt.threshold)
     accuracy = TripletAccuracy()
 
     best_loss = np.inf

@@ -13,7 +13,7 @@ import random
 '''
 
 class TestImageDataset(Dataset):
-    def __init__(self, root_dir, dir_list, transform=None):
+    def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
         self.transform = transform
         self.mode = 'image'
@@ -24,20 +24,17 @@ class TestImageDataset(Dataset):
 
         self.num_classes = len(self.labelDic['label2index'])
 
-        dirs = [os.path.join(root_dir, d) for d in dir_list]
-
         self.images = []
         self.ids = []
         self.frames = []
         
-        for di in dirs:
-            img_dir_list = os.listdir(os.path.join(di, 'image'))
-            for img_dir in img_dir_list:
-                img_names = os.listdir(os.path.join(di, 'image', img_dir))
-                for img_name in img_names:
-                    self.images.append(os.path.join(di, 'image', img_dir, img_name))
-                    self.frames.append(img_name.split('.')[0])
-                    self.ids.append(img_dir)
+        img_dir_list = os.listdir(os.path.join(root_dir, 'image'))
+        for img_dir in img_dir_list:
+            img_names = os.listdir(os.path.join(root_dir, 'image', img_dir))
+            for img_name in img_names:
+                self.images.append(os.path.join(root_dir, 'image', img_dir, img_name))
+                self.frames.append(img_name.split('.')[0])
+                self.ids.append(img_dir)
         # self.images = self.images[:1000]
 
     def __len__(self):
@@ -62,7 +59,7 @@ class TestImageDataset(Dataset):
 
 
 class TestVideoDataset(Dataset):
-    def __init__(self, root_dir, dir_list, transform=None, n=10):
+    def __init__(self, root_dir, transform=None, n=10):
         self.root_dir = root_dir
         self.transform = transform
         self.n = n
@@ -74,18 +71,15 @@ class TestVideoDataset(Dataset):
 
         self.num_classes = len(self.labelDic['label2index'])
 
-        dirs = [os.path.join(root_dir, d) for d in dir_list]
-
         gap = 400 // n
         self.frames_ids = [i*gap for i in range(n)]
         self.videos = []
         self.ids = []
         
-        for di in dirs:
-            vdo_names = os.listdir(os.path.join(di, 'video'))
-            for vdo_name in vdo_names:
-                self.videos.append(os.path.join(di, 'video', vdo_name))
-                self.ids.append(vdo_name.split('.')[0])
+        vdo_names = os.listdir(os.path.join(root_dir, 'video'))
+        for vdo_name in vdo_names:
+            self.videos.append(os.path.join(root_dir, 'video', vdo_name))
+            self.ids.append(vdo_name.split('.')[0])
         # self.videos = self.videos[:100]
 
     def __len__(self):

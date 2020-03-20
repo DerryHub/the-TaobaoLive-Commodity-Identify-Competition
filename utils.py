@@ -1,6 +1,7 @@
 import os
 import torch
 from torch.optim.optimizer import Optimizer
+from torch.functional import F
 import numpy as np
 import math
 import cv2
@@ -148,7 +149,7 @@ def collater_test(data):
 
     return {'img': imgs, 'scale': scales}
 
-class TripletLoss():
+class TripletFocalLoss():
     def __init__(self, alpha, gamma):
         self.alpha = alpha
         self.gamma = gamma
@@ -162,9 +163,26 @@ class TripletLoss():
 
     def distance(self, f_1, f_2):
         distance = torch.sum((f_1-f_2)**2, dim=1) / 4
-        # distance = torch.mean(distance)
         return distance
     
+class TripletLoss():
+    def __init__(self, alpha, gamma, threshold):
+        self.alpha = alpha
+        self.gamma = gamma
+        self.threshold = threshold
+
+    def __call__(self, feature_q, feature_p, feature_n):
+        distance_p = self.distance(feature_q, feature_p)
+        distance_n = self.distance(feature_q, feature_n)
+        loss = F.relu(distance_p-distance_n+self.threshold)
+        loss = torch.mean(loss)
+        return loss
+
+    def distance(self, f_1, f_2):
+        distance = torch.sum((f_1-f_2)**2, dim=1) / 4
+        return distance
+
+
 class TripletAccuracy():
     def __call__(self, feature_q, feature_p, feature_n):
         distance_p = self.distance(feature_q, feature_p)
@@ -309,7 +327,7 @@ class AdamW(Optimizer):
         return loss
 
 if __name__ == "__main__":
-    cost = TripletLoss(0.25, 1.5)
+    cost = TripletLoss(0.25, 1.5, 0.2)
     a = torch.tensor([[1,0.],[0.8,0.6]])
     b = torch.tensor([[1,0.],[0.8,0.6]])
     c = torch.tensor([[-1,0], [1,0]])

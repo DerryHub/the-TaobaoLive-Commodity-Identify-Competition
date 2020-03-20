@@ -2,7 +2,6 @@ import os
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torch import optim
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 from arcface.resnet import ResNet
@@ -13,7 +12,8 @@ from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
-from utils import separate_bn_paras, AdamW
+# from utils import AdamW
+from torch.optim import AdamW
 import numpy as np
 
 def train(opt):
