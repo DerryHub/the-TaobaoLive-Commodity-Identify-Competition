@@ -112,7 +112,7 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
     return vdo2img
 
 def test(opt_a, opt_e):
-    k = 3
+    k = 2
     cls_k = 3
 
     dataset_img = TestImageDataset(

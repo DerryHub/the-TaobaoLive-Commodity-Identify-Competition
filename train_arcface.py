@@ -18,6 +18,7 @@ import numpy as np
 from utils import separate_bn_paras
 
 def train(opt):
+    print(opt)
     device_ids = opt.GPUs
     if torch.cuda.is_available():
         num_gpus = len(device_ids)
@@ -92,7 +93,7 @@ def train(opt):
                 {'params': paras_wo_bn + [head.module.kernel], 'weight_decay': 5e-4},
                 {'params': paras_only_bn}
             ], opt.lr)
-            
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
     cost = nn.CrossEntropyLoss()

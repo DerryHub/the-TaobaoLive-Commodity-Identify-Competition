@@ -12,6 +12,7 @@ from tqdm import tqdm
 from config import get_args_efficientdet
 
 def train(opt):
+    print(opt)
     device_ids = opt.GPUs
     if torch.cuda.is_available():
         num_gpus = len(device_ids)

@@ -16,6 +16,7 @@ from utils import TripletLoss, TripletAccuracy, TripletFocalLoss, AdamW
 import numpy as np
 
 def train(opt):
+    print(opt)
     device_ids = opt.GPUs
     if torch.cuda.is_available():
         num_gpus = len(device_ids)

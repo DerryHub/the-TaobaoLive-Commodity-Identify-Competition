@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 def train(opt):
+    print(opt)
     model = ResNet(opt)
         
     b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers)

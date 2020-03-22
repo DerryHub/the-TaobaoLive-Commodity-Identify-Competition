@@ -35,7 +35,7 @@ def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=112, help="The common width and height for all images")
     parser.add_argument("--batch_size", type=int, default=100, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
@@ -46,7 +46,7 @@ def get_args_arcface():
     parser.add_argument("--workers", type=int, default=24)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.5)
+    parser.add_argument("--m", type=float, default=0.7)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument('--threshold', type=float, default=0.3)
@@ -64,21 +64,5 @@ def get_args_arcface():
 
     # inceptionresnetv2 config
 
-    args = parser.parse_args()
-    return args
-
-def get_args_classifier():
-    parser = argparse.ArgumentParser("Classifier")
-    parser.add_argument("--image_size", type=int, default=112, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=64, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-5)
-    parser.add_argument("--num_epochs", type=int, default=500)
-    parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
-    parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--num_classes", type=int, default=None)
-    parser.add_argument('--network', default='efficientnet-b0', type=str,
-                        help='efficientnet-[b0, b1, ..]')
-    parser.add_argument('--resume', type=bool, default=True)
-    parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
     return args
