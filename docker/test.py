@@ -94,24 +94,25 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
             d = {}
             for am in argmax[i, :]:
                 if cos[i, am] > 0:
-                    if img_IDs[am] not in d:
-                        d[img_IDs[am]] = [cos[i, am], cos[i, am], am]
-                    else:
-                        l = d[img_IDs[am]][:]
-                        if cos[i, am] > l[1]:
-                            l[1] = cos[i, am]
-                            l[2] = am
-                        l[0] += cos[i, am]
-                        d[img_IDs[am]] = l
-            if len(d) == 0:
-                continue
-            d = sorted(d.items(), key=lambda x:x[1][0], reverse=True)
-            vdo2img.append([vdo_IDs[i+1000*index], d[0][0], d[0][1][0], i+1000*index, d[0][1][2]])
+                    vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], cos[i, am], i+1000*index, am])
+            #         if img_IDs[am] not in d:
+            #             d[img_IDs[am]] = [cos[i, am], cos[i, am], am]
+            #         else:
+            #             l = d[img_IDs[am]][:]
+            #             if cos[i, am] > l[1]:
+            #                 l[1] = cos[i, am]
+            #                 l[2] = am
+            #             l[0] += cos[i, am]
+            #             d[img_IDs[am]] = l
+            # if len(d) == 0:
+            #     continue
+            # d = sorted(d.items(), key=lambda x:x[1][0], reverse=True)
+            # vdo2img.append([vdo_IDs[i+1000*index], d[0][0], d[0][1][0], i+1000*index, d[0][1][2]])
                 # vdo_id, img_id, score, vdo_index, img_index
     return vdo2img
 
 def test(opt_a, opt_e):
-    k = 2
+    k = 3
     cls_k = 3
 
     dataset_img = TestImageDataset(

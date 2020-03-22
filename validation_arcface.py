@@ -10,6 +10,7 @@ from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
+from joint_bayesian.JointBayesian import verify
 import joblib
 import json
 
@@ -65,6 +66,28 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
             break
     return rates_t, rates_f, acc/len(cos)
 
+def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
+    print('Calculating Joint Bayesian...')
+    G = np.load(os.path.join(opt.saved_path, 'G.npy'))
+    A = np.load(os.path.join(opt.saved_path, 'A.npy'))
+
+    scores = verify(A, G, vdo_features, img_features)
+
+    argmax = np.argsort(-scores, axis=1)
+    acc = 0
+    rates_t = []
+    rates_f = []
+    for i in tqdm(range(len(scores))):
+        for j in argmax[i]:
+            if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
+                continue
+            if j == i:
+                acc +=1
+                rates_t.append(scores[i, j])
+            else:
+                rates_f.append(scores[i, j])
+            break
+    return rates_t, rates_f, acc/len(scores)
 
 
 def evaluate(opt):
@@ -113,6 +136,7 @@ def evaluate(opt):
         ins2labDic = json.load(f)
 
     rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)
     # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
     print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
     print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))

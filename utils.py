@@ -204,7 +204,7 @@ def separate_bn_paras(modules):
     paras_wo_bn = []
     
     for layer in modules:
-        if 'model' in str(layer.__class__):
+        if 'arcface' in str(layer.__class__):
             continue
         if 'container' in str(layer.__class__):
             continue
@@ -213,7 +213,6 @@ def separate_bn_paras(modules):
                 paras_only_bn.extend([*layer.parameters()])
             else:
                 paras_wo_bn.extend([*layer.parameters()])
-    print(len(modules), len(paras_only_bn), len(paras_wo_bn))
     return paras_only_bn, paras_wo_bn
 
 class AdamW(Optimizer):

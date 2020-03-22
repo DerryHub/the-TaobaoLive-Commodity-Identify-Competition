@@ -15,6 +15,7 @@ from arcface.utils import l2_norm
 # from utils import AdamW
 from torch.optim import AdamW
 import numpy as np
+from utils import separate_bn_paras
 
 def train(opt):
     device_ids = opt.GPUs
@@ -73,6 +74,8 @@ def train(opt):
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
     
+    paras_only_bn, paras_wo_bn = separate_bn_paras(backbone)
+
     device = torch.device("cuda:{}".format(device_ids[0]))
 
     backbone.to(device)
@@ -81,10 +84,15 @@ def train(opt):
     head.to(device)
     head = nn.DataParallel(head, device_ids=device_ids)
 
+    # optimizer = AdamW([
+    #             {'params': backbone.parameters()},
+    #             {'params': head.parameters()}
+    #         ], opt.lr)
     optimizer = AdamW([
-                {'params': backbone.parameters()},
-                {'params': head.parameters()}
+                {'params': paras_wo_bn + [head.module.kernel], 'weight_decay': 5e-4},
+                {'params': paras_only_bn}
             ], opt.lr)
+            
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
     cost = nn.CrossEntropyLoss()
