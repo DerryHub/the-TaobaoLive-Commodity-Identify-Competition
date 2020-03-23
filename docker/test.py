@@ -12,6 +12,7 @@ from arcface.googlenet import GoogLeNet
 from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from config import get_args_efficientdet, get_args_arcface
+from joint_bayesian.JointBayesian import verify
 from tqdm import tqdm
 import json
 
@@ -91,7 +92,7 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
         argmax = np.argpartition(cos, kth=-k, axis=1)[:, -k:]
         
         for i in range(argmax.shape[0]):
-            d = {}
+            # d = {}
             for am in argmax[i, :]:
                 if cos[i, am] > 0:
                     vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], cos[i, am], i+1000*index, am])
@@ -109,6 +110,27 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
             # d = sorted(d.items(), key=lambda x:x[1][0], reverse=True)
             # vdo2img.append([vdo_IDs[i+1000*index], d[0][0], d[0][1][0], i+1000*index, d[0][1][2]])
                 # vdo_id, img_id, score, vdo_index, img_index
+    return vdo2img
+
+def joint_bayesian(opt, vdo_features, img_features, vdo_IDs, img_IDs, k):
+    print('Calculating Joint Bayesian...')
+    G = np.load(os.path.join(opt.saved_path, 'G.npy'))
+    A = np.load(os.path.join(opt.saved_path, 'A.npy'))
+
+    vdo2img = []
+    length = vdo_features.shape[0]
+    for index in tqdm(range(1+length//1000)):
+        if index < length//1000:
+            scores = verify(A, G, vdo_features[1000*index:1000*(index+1)], img_features)
+        else:
+            scores = verify(A, G, vdo_features[1000*index:], img_features)
+        
+        argmax = np.argpartition(scores, kth=-k, axis=1)[:, -k:]
+        
+        for i in range(argmax.shape[0]):
+            for am in argmax[i, :]:
+                if scores[i, am] > 0:
+                    vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], scores[i, am], i+1000*index, am])
     return vdo2img
 
 def test(opt_a, opt_e):
@@ -174,6 +196,7 @@ def test(opt_a, opt_e):
         len(vdo_classes)]))==1
 
     vdo2img = cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k)
+    # vdo2img = joint_bayesian(opt_a, vdo_features, img_features, vdo_IDs, img_IDs, k)
 
     vdo2img_d = {}
     print('merging videos...')
@@ -184,12 +207,7 @@ def test(opt_a, opt_e):
             img_index = l[4]
             vdo_cls = vdo_classes[vdo_index]
             img_cls = img_classes[img_index]
-            for v_c in vdo_cls:
-                for v_i in img_cls:
-                    if v_c == v_i:
-                        flag = True
-                        break
-            if not flag:
+            if len(set(vdo_cls) & set(img_cls)) == 0:
                 continue
         if l[0] not in vdo2img_d:
             vdo2img_d[l[0]] = {}
@@ -238,28 +256,20 @@ def test(opt_a, opt_e):
         for index in img_index:
             img_f = np.append(img_f, img_features[index].reshape(1, opt_a.embedding_size), axis=0)
         cos = cosine_similarity(vdo_f, img_f)
-        # l = []
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
             simis_i = np.argmax(simis)
             if simis[simis_i] < 0:
                 continue
             img_i = img_index[simis_i]
-            # l.append([simis[simis_i], img_i, index])
             d = {}
             d['img_name'] = img_frames[img_i]
             d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
             d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
             result[vdo_id]['result'].append(d)
-        # if len(l) == 0:
-        #     del result[vdo_id]
-        #     continue
-        # l = sorted(l, key=lambda x:x[0], reverse=True)
-        # d = {}
-        # d['img_name'] = img_frames[l[0][1]]
-        # d['item_box'] = list(map(int, img_boxes[l[0][1]].tolist()))
-        # d['frame_box'] = list(map(int, vdo_boxes[l[0][2]].tolist()))
-        # result[vdo_id]['result'].append(d)
+
+        if len(result[vdo_id]['result']) == 0:
+            del result[vdo_id]
 
     print(len(result))
 

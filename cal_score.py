@@ -49,6 +49,7 @@ for k in tqdm(dic.keys()):
                 instance = annotation['instance_id']
                 if instance not in instances:
                     flag_1 = False
+                    flag_2 = False
                 else:
                     for box in img_box:
                         IOU = iou(torch.tensor(result['item_box']).unsqueeze(0), box.unsqueeze(0))

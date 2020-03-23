@@ -92,7 +92,7 @@ def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
 
 def evaluate(opt):
     dataset = ValidationArcfaceDataset(root_dir='data/validation_instance/', size=(opt.size, opt.size))
-    opt.batch_size *= 1
+    opt.batch_size *= 4
     loader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
 
     if opt.network == 'resnet':
