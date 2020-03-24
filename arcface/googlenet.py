@@ -10,30 +10,31 @@ class GoogLeNet(nn.Module):
         drop_ratio = config.drop_ratio
         embedding_size = config.embedding_size
 
-        self.conv1 = BasicConv2d(3, 64, kernel_size=7, stride=2, padding=3)
-        self.maxpool1 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
-        self.conv2 = BasicConv2d(64, 64, kernel_size=1)
-        self.conv3 = BasicConv2d(64, 192, kernel_size=3, padding=1)
-        self.maxpool2 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
+        # self.conv1 = BasicConv2d(3, 64, kernel_size=7, stride=2, padding=3)
+        # self.maxpool1 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
+        self.conv2 = BasicConv2d(3, 64, kernel_size=1)
+        self.conv3 = BasicConv2d(64, 192, kernel_size=3, stride=2)
+        # self.maxpool2 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
 
         self.inception3a = Inception(192, 64, 96, 128, 16, 32, 32)
-        self.inception3b = Inception(256, 128, 128, 192, 32, 96, 64)
-        self.maxpool3 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
+        self.inception3b = Inception(256, 128, 128, 192, 32, 96, 64, stride=2)
+        # self.maxpool3 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
 
         self.inception4a = Inception(480, 192, 96, 208, 16, 48, 64)
         self.inception4b = Inception(512, 160, 112, 224, 24, 64, 64)
-        self.inception4c = Inception(512, 128, 128, 256, 24, 64, 64)
+        self.inception4c = Inception(512, 128, 128, 256, 24, 64, 64, stride=2)
         self.inception4d = Inception(512, 112, 144, 288, 32, 64, 64)
-        self.inception4e = Inception(528, 256, 160, 320, 32, 128, 128)
-        self.maxpool4 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
+        self.inception4e = Inception(528, 256, 160, 320, 32, 128, 128, stride=2)
+        # self.maxpool4 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
         self.inception5a = Inception(832, 256, 160, 320, 32, 128, 128)
-        self.inception5b = Inception(832, 384, 192, 384, 48, 128, 128)
+        self.inception5b = Inception(832, 384, 192, 384, 48, 128, 128, stride=2)
 
         self.output_layer = nn.Sequential(nn.BatchNorm2d(1024), 
                                        nn.Dropout(drop_ratio),
+                                       BasicConv2d(1024, 1024, kernel_size=4),
                                        Flatten(),
-                                       nn.Linear(1024 * 4 * 4, embedding_size),
+                                       nn.Linear(1024, embedding_size),
                                        nn.BatchNorm1d(embedding_size))
 
         if not config.resume:
@@ -53,15 +54,15 @@ class GoogLeNet(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.maxpool1(x)
+        # x = self.conv1(x)
+        # x = self.maxpool1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = self.maxpool2(x)
-
+        # x = self.maxpool2(x)
+        
         x = self.inception3a(x)
         x = self.inception3b(x)
-        x = self.maxpool3(x)
+        # x = self.maxpool3(x)
         x = self.inception4a(x)
 
         x = self.inception4b(x)
@@ -69,34 +70,33 @@ class GoogLeNet(nn.Module):
         x = self.inception4d(x)
 
         x = self.inception4e(x)
-        x = self.maxpool4(x)
+        # x = self.maxpool4(x)
         x = self.inception5a(x)
         x = self.inception5b(x)
-        
         x = self.output_layer(x)
         return l2_norm(x)
 
 
 class Inception(nn.Module):
 
-    def __init__(self, in_channels, ch1x1, ch3x3red, ch3x3, ch5x5red, ch5x5, pool_proj):
+    def __init__(self, in_channels, ch1x1, ch3x3red, ch3x3, ch5x5red, ch5x5, pool_proj, stride=1):
         super(Inception, self).__init__()
 
-        self.branch1 = BasicConv2d(in_channels, ch1x1, kernel_size=1)
+        self.branch1 = BasicConv2d(in_channels, ch1x1, kernel_size=1, stride=stride)
 
         self.branch2 = nn.Sequential(
             BasicConv2d(in_channels, ch3x3red, kernel_size=1),
-            BasicConv2d(ch3x3red, ch3x3, kernel_size=3, padding=1)
+            BasicConv2d(ch3x3red, ch3x3, kernel_size=3, padding=1, stride=stride)
         )
 
         self.branch3 = nn.Sequential(
             BasicConv2d(in_channels, ch5x5red, kernel_size=1),
-            BasicConv2d(ch5x5red, ch5x5, kernel_size=3, padding=1)
+            BasicConv2d(ch5x5red, ch5x5, kernel_size=3, padding=1, stride=stride)
         )
 
         self.branch4 = nn.Sequential(
             nn.MaxPool2d(kernel_size=3, stride=1, padding=1, ceil_mode=True),
-            BasicConv2d(in_channels, pool_proj, kernel_size=1)
+            BasicConv2d(in_channels, pool_proj, kernel_size=1, stride=stride)
         )
 
     def forward(self, x):
@@ -120,3 +120,9 @@ class BasicConv2d(nn.Module):
         x = self.conv(x)
         x = self.bn(x)
         return F.relu(x, inplace=True)
+
+if __name__ == "__main__":
+    net = GoogLeNet()
+    a = torch.randn(12, 3, 112, 112)
+    b = net(a)
+    print(b.size())

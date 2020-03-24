@@ -11,18 +11,19 @@ import shutil
 from efficientdet.efficientdet import EfficientDet
 from config import get_args_efficientdet
 from tqdm import tqdm
+import numpy as np
 
 
 writePIC = False
-calIOU = False
-calPR = True
+calIOU = True
+calPR = False
     
 
 def test(opt):
     opt.resume = True
     test_set = EfficientdetDataset(opt.data_path, mode='validation', transform=transforms.Compose([Normalizer(), Resizer()]))
     opt.num_classes = test_set.num_classes
-    opt.batch_size = opt.batch_size*4
+    opt.batch_size *= 8
     test_params = {"batch_size": opt.batch_size,
                    "shuffle": False,
                    "drop_last": False,
@@ -76,18 +77,21 @@ def test(opt):
                     classes = set(annot[:, 4].tolist())
                     iou_score = []
                     for c in classes:
-                        box = cat[cat[:, 1]==c][:, 2:]
+                        box = np.zeros((0, 4))
+                        for item in cat:
+                            if c in item[1:6]:
+                                box = np.append(box, item[6:].numpy().reshape(1, -1), axis=0)
+                        box = torch.from_numpy(box)
                         if box.size(0) == 0:
                             iou_score.append(0.0)
                             continue
                         tgt = annot[annot[:, 4]==c][:, :4]
-                        iou_s = iou(box, tgt.cuda())
+                        iou_s = iou(box, tgt)
                         iou_score.append(iou_s.cpu().numpy())
-                    classes_pre = set(cat[:, 1].tolist())
+                    classes_pre = cat[:, 1:6].tolist()
                     for c in classes_pre:
-                        if c not in classes:
+                        if len(set(c) & set(classes)) == 0:
                             iou_score.append(0)
-                    # print(classes_pre, classes ,iou_score)
                     IoU_scores.append(sum(iou_score)/len(iou_score))
             
             if calPR:
@@ -98,8 +102,6 @@ def test(opt):
                         s = iou(pre[-4:].unsqueeze(0), gt[:4].unsqueeze(0))
                         if s > 0.5:
                             N_TP_iou += 1
-                            # if pre[1] == gt[-1]:
-                            #     N_TP += 1
                             if gt[-1] in pre[1:6]:
                                 N_TP += 1
             
@@ -113,7 +115,7 @@ def test(opt):
                     pred_prob = float(scores[box_id])
                     if pred_prob < opt.cls_threshold:
                         break
-                    pred_label = int(labels[box_id])
+                    pred_label = int(top5_label[box_id][0])
                     xmin, ymin, xmax, ymax = boxes[box_id, :]
                     color = colors[pred_label]
                     cv2.rectangle(output_image, (xmin, ymin), (xmax, ymax), color, 2)
