@@ -77,14 +77,14 @@ def test(opt):
                     classes = set(annot[:, 4].tolist())
                     iou_score = []
                     for c in classes:
-                        box = np.zeros((0, 4))
+                        box = []
                         for item in cat:
                             if c in item[1:6]:
-                                box = np.append(box, item[6:].numpy().reshape(1, -1), axis=0)
-                        box = torch.from_numpy(box)
-                        if box.size(0) == 0:
+                                box.append(item[6:])
+                        if len(box) == 0:
                             iou_score.append(0.0)
                             continue
+                        box = torch.stack(box, dim=0)
                         tgt = annot[annot[:, 4]==c][:, :4]
                         iou_s = iou(box, tgt)
                         iou_score.append(iou_s.cpu().numpy())
@@ -93,7 +93,7 @@ def test(opt):
                         if len(set(c) & set(classes)) == 0:
                             iou_score.append(0)
                     IoU_scores.append(sum(iou_score)/len(iou_score))
-            
+            print(IoU_scores)
             if calPR:
                 N_P += cat.size(0)
                 N_GT += annot.size(0)

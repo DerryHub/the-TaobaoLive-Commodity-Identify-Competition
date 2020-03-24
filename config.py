@@ -46,7 +46,7 @@ def get_args_arcface():
     parser.add_argument("--workers", type=int, default=24)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.1)
+    parser.add_argument("--m", type=float, default=0.5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument('--threshold', type=float, default=0.3)
