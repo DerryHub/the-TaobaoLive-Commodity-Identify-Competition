@@ -139,7 +139,7 @@ def test(opt):
                 cv2.imwrite("{}/{}_prediction.jpg".format(opt.prediction_dir, imgPath.split('/')[-1][:-4]), output_image)
     
     if calIOU:
-        print(sum(IoU_scores)/len(IoU_scores))
+        print('IoU is '.format(sum(IoU_scores)/len(IoU_scores)))
     if calPR:
         print('N_P: {}\tN_GT: {}\tN_TP_iou: {}\tN_TP: {}'.format(N_P, N_GT, N_TP_iou, N_TP))
         print('精确率: {}\t召回率: {}\t分类准确率: {}'.format(N_TP/N_P, N_TP/N_GT, N_TP/N_TP_iou))
