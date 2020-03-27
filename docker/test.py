@@ -184,8 +184,8 @@ def test(opt_a, opt_e):
     backbone.eval()
     
     print('predicting boxs...')
-    imgs = pre_efficient(dataset_img, efficientdet, opt_e, cls_k, ins_f=True)
-    vdos = pre_efficient(dataset_vdo, efficientdet, opt_e, cls_k, ins_f=True)
+    imgs = pre_efficient(dataset_img, efficientdet_image, opt_e, cls_k, ins_f=True)
+    vdos = pre_efficient(dataset_vdo, efficientdet_video, opt_e, cls_k, ins_f=True)
     
     dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
     dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
