@@ -14,15 +14,15 @@ class Normalizer_Test(object):
         self.std = np.array([[[0.22700769, 0.23887326, 0.23833767]]])
 
     def __call__(self, sample):
-        image = sample['img']
+        image, text = sample['img'], sample['text']
 
-        return {'img': ((image.astype(np.float32) - self.mean) / self.std)}
+        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'text': text}
 
 
 class Resizer_Test(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample, common_size=512):
-        image = sample['img']
+        image, text = sample['img'], sample['text']
         height, width, _ = image.shape
         if height > width:
             scale = common_size / height
@@ -38,14 +38,16 @@ class Resizer_Test(object):
         new_image = np.zeros((common_size, common_size, 3))
         new_image[0:resized_height, 0:resized_width] = image
 
-        return {'img': torch.from_numpy(new_image), 'scale': scale}
+        return {'img': torch.from_numpy(new_image), 'scale': scale, 'text': text}
 
 def collater_test(data):
     imgs = [s['img'] for s in data]
     scales = [s['scale'] for s in data]
+    text = [s['text'] for s in data]
 
     imgs = torch.from_numpy(np.stack(imgs, axis=0))
+    text = torch.stack(text, dim=0)
 
     imgs = imgs.permute(0, 3, 1, 2)
 
-    return {'img': imgs, 'scale': scales}
+    return {'img': imgs, 'scale': scales, 'text': text}

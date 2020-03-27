@@ -25,6 +25,7 @@ def get_args_efficientdet():
     parser.add_argument("--cls_threshold", type=float, default=0.3)
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
+    parser.add_argument('--instance_threshold', type=float, default=0.3)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
     parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()

@@ -4,6 +4,7 @@ from shutil import copyfile, rmtree
 from tqdm import tqdm
 import cv2
 import numpy as np
+import jieba
 
 def processImage(img_tat, root, annotation, label):
     img_ann_path = os.path.join(root, 'image_annotation/')
@@ -293,6 +294,128 @@ def createInstanceID(root_dir='data'):
     with open(os.path.join(root_dir, 'instanceID.json'), 'w') as f:
         json.dump(clsDic, f)
 
+
+def createText(mode, root_dir='data'):
+    if mode == 'train':
+        roots = [os.path.join(root_dir, 'train_dataset_part{}'.format(i+1)) for i in range(6)]
+    elif mode == 'validation':
+        roots = [os.path.join(root_dir, 'validation_dataset_part{}'.format(i+1)) for i in range(2)]
+
+    img_dic = {}
+    vdo_dic = {}
+
+    for root in tqdm(roots):
+        img_root = os.path.join(root, 'image_text')
+        vdo_root = os.path.join(root, 'video_text')
+
+        imgs = os.listdir(img_root)
+        for img_f in imgs:
+            with open(os.path.join(img_root, img_f)) as f:
+                text = f.readline()
+            img_dic[img_f[:-4]] = text
+        
+        vdos = os.listdir(vdo_root)
+        for vdo_f in vdos:
+            with open(os.path.join(vdo_root, vdo_f)) as f:
+                text = f.readline()
+            vdo_dic[vdo_f[:-4]] = text
+
+    with open(os.path.join(root_dir, '{}_images_text.json'.format(mode)), 'w') as f:
+        json.dump(img_dic, f)
+    with open(os.path.join(root_dir, '{}_videos_text.json'.format(mode)), 'w') as f:
+        json.dump(vdo_dic, f)
+
+def createVocab(root_dir='data', mode='train'):
+    with open(os.path.join(root_dir, '{}_images_text.json'.format(mode)), 'r') as f:
+        img_dic = json.load(f)
+    with open(os.path.join(root_dir, '{}_videos_text.json'.format(mode)), 'r') as f:
+        vdo_dic = json.load(f)
+
+    with open(os.path.join(root_dir, 'stop_use.txt'), 'r') as f:
+        stop_use = f.readlines()
+    stop_use = [w.strip() for w in stop_use]
+    
+    allwords = []
+    for value in tqdm(img_dic.values()):
+        words = jieba.cut(value, cut_all=False, HMM=True)
+        words = [w.strip() for w in words if w.strip() not in stop_use and w.strip()]
+        allwords += words
+
+    for value in tqdm(vdo_dic.values()):
+        words = jieba.cut(value, cut_all=False, HMM=True)
+        words = [w.strip() for w in words if w.strip() not in stop_use and w.strip()]
+        allwords += words
+
+    allwords = set(allwords)
+
+    vocab = {}
+    vocab['[PAD]'] = 0
+
+    for i, w in enumerate(allwords):
+        vocab[w] = i+1
+    
+    with open(os.path.join(root_dir, 'vocab.json'), 'w') as f:
+        json.dump(vocab, f)
+
+def createTF_IDF(root_dir='data', mode='train'):
+    with open(os.path.join(root_dir, '{}_images_text.json'.format(mode)), 'r') as f:
+        img_dic = json.load(f)
+    with open(os.path.join(root_dir, '{}_videos_text.json'.format(mode)), 'r') as f:
+        vdo_dic = json.load(f)
+
+    with open(os.path.join(root_dir, 'vocab.json'), 'r') as f:
+        vocab = json.load(f)
+
+    with open(os.path.join(root_dir, 'stop_use.txt'), 'r') as f:
+        stop_use = f.readlines()
+    stop_use = [w.strip() for w in stop_use]
+    
+    TF = {}
+    IDF = {}
+    for value in tqdm(img_dic.values()):
+        words = jieba.cut(value, cut_all=False, HMM=True)
+        words = [w.strip() for w in words if w.strip() not in stop_use and w.strip()]
+        for w in words:
+            if w in TF:
+                TF[w] += 1
+            else:
+                TF[w] = 1
+        for w in set(words):
+            if w in IDF:
+                IDF[w] += 1
+            else:
+                IDF[w] = 1
+
+    for value in tqdm(vdo_dic.values()):
+        words = jieba.cut(value, cut_all=False, HMM=True)
+        words = [w.strip() for w in words if w.strip() not in stop_use and w.strip()]
+        for w in words:
+            if w in TF:
+                TF[w] += 1
+            else:
+                TF[w] = 1
+        for w in set(words):
+            if w in IDF:
+                IDF[w] += 1
+            else:
+                IDF[w] = 1
+
+    s = sum(TF.values())
+    for k in TF.keys():
+        TF[k] /= s
+    
+    s = len(img_dic) + len(vdo_dic)
+    for k in IDF.keys():
+        IDF[k] = np.log10(s/IDF[k])
+
+    dic = {}
+    for w in IDF.keys():
+        dic[vocab[w]] = TF[w]*IDF[w]
+    dic[vocab['[PAD]']] = 0
+    with open(os.path.join(root_dir, 'TF_IDF.json'), 'w') as f:
+        json.dump(dic, f)
+    
+
 if __name__ == "__main__":
 #     label = {}
 #     label['label2index'] = {}
@@ -302,6 +425,9 @@ if __name__ == "__main__":
     # saveNumpyInstance('data', 'train', (128, 128))
     # saveNumpyInstance('data', 'validation', (128, 128))
 #     createInstance2Label('data')
-    createInstanceID()
-    
+    # createInstanceID()
+    # createText(mode='train')
+    # createText(mode='validation')
+    createVocab()
+    createTF_IDF()
 

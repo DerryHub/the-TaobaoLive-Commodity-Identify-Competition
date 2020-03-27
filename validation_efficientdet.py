@@ -15,15 +15,15 @@ import numpy as np
 
 
 writePIC = False
-calIOU = True
-calPR = False
+calIOU = False
+calPR = True
     
 
 def test(opt):
     opt.resume = True
-    test_set = EfficientdetDataset(opt.data_path, mode='validation', transform=transforms.Compose([Normalizer(), Resizer()]))
+    test_set = EfficientdetDataset(opt.data_path, mode='validation', transform=transforms.Compose([Normalizer(), Resizer()]), imgORvdo=opt.imgORvdo)
     opt.num_classes = test_set.num_classes
-    opt.batch_size *= 8
+    opt.batch_size *= 2
     test_params = {"batch_size": opt.batch_size,
                    "shuffle": False,
                    "drop_last": False,
@@ -32,7 +32,7 @@ def test(opt):
     test_generator = DataLoader(test_set, **test_params)
     
     model = EfficientDet(opt)
-    model.load_state_dict(torch.load(os.path.join(opt.saved_path, opt.network+'.pth')))
+    model.load_state_dict(torch.load(os.path.join(opt.saved_path, opt.network+'_'+opt.imgORvdo+'.pth')))
     model.cuda()
     model.set_is_training(False)
     model.eval()
@@ -48,19 +48,23 @@ def test(opt):
     N_P = 0
     N_GT = 0
     N_TP_iou = 0
+    N_GT_ins = 0
+    N_P_ins = 0
+    N_TP_ins = 0
     for i, data in enumerate(progress_bar):
         scale = data['scale']
         with torch.no_grad():
-            output_list = model(data['img'].cuda().float())
+            output_list = model([data['img'].cuda().float(), data['text'].cuda()])
         
         for j, output in enumerate(output_list):
             imgPath = test_set.getImagePath(i*opt.batch_size+j)
-            scores, labels, all_labels, boxes = output
+            scores, labels, instances, all_labels, boxes = output
+            # print(instances)
             annot = data['annot'][j]
             annot = annot[annot[:, 4]!=-1]
             # print(labels, torch.argsort(-all_labels, dim=1))
             top5_label = torch.argsort(-all_labels, dim=1)[:, :5]
-            cat = torch.cat([scores.view(-1, 1), top5_label.float(), boxes], dim=1).cpu()
+            cat = torch.cat([scores.view(-1, 1), top5_label.float(), boxes, instances], dim=1).cpu()
             # print(cat.size())
             cat = cat[cat[:, 0]>=opt.cls_threshold]
             # print(scores.size(), labels.size(), boxes.size(), annot.size())
@@ -80,7 +84,7 @@ def test(opt):
                         box = []
                         for item in cat:
                             if c in item[1:6]:
-                                box.append(item[6:])
+                                box.append(item[6:10])
                         if len(box) == 0:
                             iou_score.append(0.0)
                             continue
@@ -93,21 +97,29 @@ def test(opt):
                         if len(set(c) & set(classes)) == 0:
                             iou_score.append(0)
                     IoU_scores.append(sum(iou_score)/len(iou_score))
-            print(IoU_scores)
+            # print(IoU_scores)
+
             if calPR:
                 N_P += cat.size(0)
                 N_GT += annot.size(0)
+                N_GT_ins += int((annot[:, 5] == 1).sum())
+                N_P_ins += int((cat[:, 10] == 1).sum())
+                # print(cat[:, 10], annot[:, 5])
+                # print(N_GT_ins)
                 for pre in cat:
                     for gt in annot:
-                        s = iou(pre[-4:].unsqueeze(0), gt[:4].unsqueeze(0))
+                        s = iou(pre[6:10].unsqueeze(0), gt[:4].unsqueeze(0))
                         if s > 0.5:
                             N_TP_iou += 1
-                            if gt[-1] in pre[1:6]:
+                            if gt[4] in pre[1:6]:
                                 N_TP += 1
+                            if gt[5] == pre[10] and gt[5] == 1:
+                                N_TP_ins += 1
             
 
             if writePIC:
                 annot_labels = annot[:, 4].clone()
+                annot_instance = annot[:, 5].clone()
                 annot /= scale[j]
                 boxes /= scale[j]
                 output_image = cv2.imread(os.path.join(opt.data_path, imgPath))
@@ -115,7 +127,8 @@ def test(opt):
                     pred_prob = float(scores[box_id])
                     if pred_prob < opt.cls_threshold:
                         break
-                    pred_label = int(top5_label[box_id][0])
+                    # pred_label = int(top5_label[box_id][0])
+                    pred_label = instances[box_id, 0]
                     xmin, ymin, xmax, ymax = boxes[box_id, :]
                     color = colors[pred_label]
                     cv2.rectangle(output_image, (xmin, ymin), (xmax, ymax), color, 2)
@@ -127,7 +140,8 @@ def test(opt):
                         (xmin, ymin + text_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1,
                         color, 2)
                 for box_id in range(annot.size(0)):
-                    true_label = int(annot_labels[box_id])
+                    # true_label = int(annot_labels[box_id])
+                    true_label = annot_instance[box_id]
                     xmin, ymin, xmax, ymax = annot[box_id, :4]
                     cv2.rectangle(output_image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 2)
                     text_size = cv2.getTextSize('g: {}'.format(true_label), cv2.FONT_HERSHEY_PLAIN, 3, 2)[0]
@@ -141,8 +155,15 @@ def test(opt):
     if calIOU:
         print('IoU is '.format(sum(IoU_scores)/len(IoU_scores)))
     if calPR:
+        print('*'*100)
+        print('bbox 识别率:')
         print('N_P: {}\tN_GT: {}\tN_TP_iou: {}\tN_TP: {}'.format(N_P, N_GT, N_TP_iou, N_TP))
         print('精确率: {}\t召回率: {}\t分类准确率: {}'.format(N_TP/N_P, N_TP/N_GT, N_TP/N_TP_iou))
+        print('*'*100)
+        print('instance 识别率:')
+        print('N_P_ins: {}\tN_GT_ins: {}\tN_TP_ins: {}'.format(N_P_ins, N_GT_ins, N_TP_ins))
+        print('精确率: {}\t召回率: {}'.format(N_TP_ins/N_P_ins, N_TP_ins/N_GT_ins))
+        print('*'*100)
 
 if __name__ == "__main__":
     opt = get_args_efficientdet()

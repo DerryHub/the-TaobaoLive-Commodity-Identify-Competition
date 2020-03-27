@@ -97,7 +97,7 @@ def get_blocks(num_layers):
 class ResNet(nn.Module):
     def __init__(self, config):
         super(ResNet, self).__init__()
-        num_layers = config.num_layers
+        num_layers = config.num_layers_r
         drop_ratio = config.drop_ratio
         mode = config.mode
         embedding_size = config.embedding_size

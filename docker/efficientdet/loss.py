@@ -21,10 +21,11 @@ class FocalLoss(nn.Module):
     def __init__(self):
         super(FocalLoss, self).__init__()
 
-    def forward(self, classifications, regressions, anchors, annotations):
+    def forward(self, instances, classifications, regressions, anchors, annotations):
         alpha = 0.25
         gamma = 2.0
         batch_size = classifications.shape[0]
+        instance_losses = []
         classification_losses = []
         regression_losses = []
 
@@ -36,7 +37,8 @@ class FocalLoss(nn.Module):
         anchor_ctr_y = anchor[:, 1] + 0.5 * anchor_heights
 
         for j in range(batch_size):
-
+            
+            instance = instances[j, :, :]
             classification = classifications[j, :, :]
             regression = regressions[j, :, :]
 
@@ -52,7 +54,8 @@ class FocalLoss(nn.Module):
                     classification_losses.append(torch.tensor(0).float())
 
                 continue
-
+            
+            instance = torch.clamp(instance, 1e-4, 1.0 - 1e-4)
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
 
             IoU = calc_iou(anchors[0, :, :], bbox_annotation[:, :4])
@@ -60,43 +63,65 @@ class FocalLoss(nn.Module):
             IoU_max, IoU_argmax = torch.max(IoU, dim=1)
 
             # compute the loss for classification
+            targets_instance = torch.ones(instance.shape) * -1
             targets = torch.ones(classification.shape) * -1
             if torch.cuda.is_available():
                 targets = targets.cuda()
+                targets_instance = targets_instance.cuda()
 
             targets[torch.lt(IoU_max, 0.4), :] = 0
+            targets_instance[torch.lt(IoU_max, 0.4), :] = 0
 
             positive_indices = torch.ge(IoU_max, 0.5)
+            # print(positive_indices.size(), targets.size())
+            # print(bbox_annotation.size())
 
             num_positive_anchors = positive_indices.sum()
 
             assigned_annotations = bbox_annotation[IoU_argmax, :]
 
+            # print(positive_indices_instance.size())
+            # print((positive_indices & (assigned_annotations[:, 5] == 1)).size())
+            targets_instance[positive_indices & (assigned_annotations[:, 5] == 1), :] = 1
+            targets_instance[positive_indices & (assigned_annotations[:, 5] == 0), :] = 0
+            # print(num_positive_anchors, (positive_indices & (assigned_annotations[:, 5] == 1)).size())
+
             targets[positive_indices, :] = 0
             targets[positive_indices, assigned_annotations[positive_indices, 4].long()] = 1
 
             alpha_factor = torch.ones(targets.shape) * alpha
+            alpha_factor_instance = torch.ones(targets_instance.shape) * alpha
             if torch.cuda.is_available():
                 alpha_factor = alpha_factor.cuda()
+                alpha_factor_instance = alpha_factor_instance.cuda()
 
             # 正负例权重
             alpha_factor = torch.where(torch.eq(targets, 1.), alpha_factor, 1. - alpha_factor)
+            alpha_factor_instance = torch.where(torch.eq(targets_instance, 1.), alpha_factor_instance, 1. - alpha_factor_instance)
             # focal loss
             focal_weight = torch.where(torch.eq(targets, 1.), 1. - classification, classification)
             focal_weight = alpha_factor * torch.pow(focal_weight, gamma)
 
+            focal_weight_instance = torch.where(torch.eq(targets_instance, 1.), 1. - instance, instance)
+            focal_weight_instance = alpha_factor_instance * torch.pow(focal_weight_instance, gamma)
+
             bce = -(targets * torch.log(classification) + (1.0 - targets) * torch.log(1.0 - classification))
+            bce_instance = -(targets_instance * torch.log(instance) + (1.0 - targets_instance) * torch.log(1.0 - instance))
 
             cls_loss = focal_weight * bce
+            instance_loss = focal_weight_instance * bce_instance
 
             zeros = torch.zeros(cls_loss.shape)
+            zeros_instance = torch.zeros(instance_loss.shape)
             if torch.cuda.is_available():
                 zeros = zeros.cuda()
+                zeros_instance = zeros_instance.cuda()
             # 对不是正例也不是负例的loss筛选
             cls_loss = torch.where(torch.ne(targets, -1.0), cls_loss, zeros)
+            instance_loss = torch.where(torch.ne(targets_instance, -1.0), instance_loss, zeros_instance)
 
             classification_losses.append(cls_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
-
+            instance_losses.append(instance_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
 
             if positive_indices.sum() > 0:
                 # 正样本对应的annotations
@@ -143,7 +168,7 @@ class FocalLoss(nn.Module):
                 else:
                     regression_losses.append(torch.tensor(0).float())
 
-        return torch.stack(classification_losses).mean(dim=0, keepdim=True), torch.stack(regression_losses).mean(dim=0,
+        return torch.stack(instance_losses).mean(dim=0, keepdim=True), torch.stack(classification_losses).mean(dim=0, keepdim=True), torch.stack(regression_losses).mean(dim=0,
                                                                                                                  keepdim=True)
 if __name__ == "__main__":
     a = torch.Tensor([[1,1,2,2],[2,2,3,3]])

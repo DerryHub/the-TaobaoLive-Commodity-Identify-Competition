@@ -16,7 +16,7 @@ from joint_bayesian.JointBayesian import verify
 from tqdm import tqdm
 import json
 
-def pre_efficient(dataset, model, opt_e, cls_k):
+def pre_efficient(dataset, model, opt_e, cls_k, ins_f=True):
     params = {"batch_size": opt_e.batch_size,
                     "shuffle": False,
                     "drop_last": False,
@@ -28,16 +28,18 @@ def pre_efficient(dataset, model, opt_e, cls_k):
     for i, data in enumerate(progress_bar):
         scale = data['scale']
         with torch.no_grad():
-            output_list = model(data['img'].cuda().float())
+            output_list = model([data['img'].cuda().float(), data['text'].cuda()])
         for j, output in enumerate(output_list):
             imgPath, imgID, frame = dataset.getImageInfo(i*opt_e.batch_size+j)
-            scores, labels, all_labels, boxes = output
+            scores, labels, instances, all_labels, boxes = output
             if cls_k:
                 argmax = np.argpartition(all_labels.cpu(), kth=-cls_k, axis=1)[:, -cls_k:]
             else:
                 argmax = -np.ones([len(all_labels), 1])
             boxes /= scale[j]
             for box_id in range(boxes.shape[0]):
+                if instances[box_id, 0] == 0 and ins_f:
+                    continue
                 pred_prob = float(scores[box_id])
                 if pred_prob < opt_e.cls_threshold:
                     break
@@ -172,8 +174,8 @@ def test(opt_a, opt_e):
     backbone.eval()
     
     print('predicting boxs...')
-    imgs = pre_efficient(dataset_img, efficientdet, opt_e, cls_k)
-    vdos = pre_efficient(dataset_vdo, efficientdet, opt_e, cls_k)
+    imgs = pre_efficient(dataset_img, efficientdet, opt_e, cls_k, ins_f=True)
+    vdos = pre_efficient(dataset_vdo, efficientdet, opt_e, cls_k, ins_f=True)
     
     dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
     dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
@@ -258,6 +260,7 @@ def test(opt_a, opt_e):
         cos = cosine_similarity(vdo_f, img_f)
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
+            # for simis_i in range(len(simis)):
             simis_i = np.argmax(simis)
             if simis[simis_i] < 0:
                 continue

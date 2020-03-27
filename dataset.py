@@ -7,18 +7,46 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import cv2
 import random
+import jieba
+
+'''
+    for text
+'''
+
+class Text2Num:
+    def __init__(self, maxLen, root_dir='data', PAD=0):
+        with open(os.path.join(root_dir, 'vocab.json'), 'r') as f:
+            self.vocab = json.load(f)
+        self.PAD = PAD
+        self.maxLen = maxLen
+
+    def __call__(self, text):
+        words = jieba.cut(text, cut_all=False, HMM=True)
+        l = []
+        for w in words:
+            if w.strip() in self.vocab:
+                l.append(self.vocab[w.strip()])
+        if len(l) > self.maxLen:
+            l = l[:self.maxLen]
+        elif len(l) < self.maxLen:
+            l += [self.PAD]*(self.maxLen-len(l))
+        
+        assert len(l) == self.maxLen
+
+        return l
 
 '''
     for efficientdet
 '''
 
 class EfficientdetDataset(Dataset):
-    def __init__(self, root_dir='data', mode='train', imgORvdo='all', transform=None):
+    def __init__(self, root_dir='data', mode='train', imgORvdo='all', transform=None, maxLen=64, PAD=0):
         assert mode in ['train', 'validation']
         assert imgORvdo in ['image', 'video', 'all']
 
         self.root_dir = root_dir
         self.transform = transform
+        text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
 
         label_file = 'label.json'
         with open(os.path.join(root_dir, label_file), 'r') as f:
@@ -33,10 +61,17 @@ class EfficientdetDataset(Dataset):
         else:
             tats = [mode + '_images', mode + '_videos']
 
+        self.textDic = {}
         ds = []
         for t in tats:
             with open(os.path.join(root_dir, t+'_annotation.json'), 'r') as f:
                 ds.append(json.load(f))
+            with open(os.path.join(root_dir, t+'_text.json'), 'r') as f:
+                self.textDic[t] = json.load(f)
+
+        for k in self.textDic.keys():
+            for kk in self.textDic[k].keys():
+                self.textDic[k][kk] = text2num(self.textDic[k][kk])
 
         ls = [d['annotations'] for d in ds]
 
@@ -51,6 +86,7 @@ class EfficientdetDataset(Dataset):
                 t.append(os.path.join(tats[i], d['img_name']))
                 t.append(d['annotations'])
                 t.append(d['img_name'])
+                t.append(tats[i])
                 self.images.append(t)
         # print(len(self.images))
         # self.images = self.images[:1000]
@@ -60,19 +96,27 @@ class EfficientdetDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        imgPath, annotationsList, imgName = self.images[index]
+        imgPath, annotationsList, imgName, t = self.images[index]
+        text_name = imgName.split('_')[0]
+        text = self.textDic[t][text_name]
+        text = torch.Tensor(text).long()
+    
         img = cv2.imread(os.path.join(self.root_dir, imgPath))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
 
-        annotations = np.zeros((0, 5))
+        annotations = np.zeros((0, 6))
         for annotationDic in annotationsList:
-            annotation = np.zeros((1, 5))
+            annotation = np.zeros((1, 6))
             annotation[0, :4] = annotationDic['box']
             annotation[0, 4] = annotationDic['label']
+            if annotationDic['instance_id'] > 0:
+                annotation[0, 5] = 1
+            else:
+                annotation[0, 5] = 0
             annotations = np.append(annotations, annotation, axis=0)
         
-        sample = {'img': img, 'annot': annotations}
+        sample = {'img': img, 'annot': annotations, 'text': text}
         if self.transform:
             sample = self.transform(sample)
         return sample
@@ -84,11 +128,11 @@ class EfficientdetDataset(Dataset):
         return self.labelDic['index2label'][str(index)]
 
     def getImagePath(self, index):
-        imgPath, annotationsList, imgName = self.images[index]
+        imgPath, annotationsList, imgName, t = self.images[index]
         return imgPath
 
     def getImageInfo(self, index):
-        imgPath, annotationsList, imgName = self.images[index]
+        imgPath, annotationsList, imgName, t = self.images[index]
         imgID, frame = imgName[:-4].split('_')
         return imgPath, imgID, frame
 
@@ -119,23 +163,15 @@ class ArcfaceDataset(Dataset):
 
         self.images = []
 
-        # instance = {}
-        # s_i = set([])
-        # s_v = set([])
-
-        # self.clsDic = {}
         with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
             self.clsDic = json.load(f)
+        with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
+            self.instance2label = json.load(f)
 
         print('Loading data...')
         for d in l_i:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                    # s_i.add(dd['instance_id'])
-                    # if dd['instance_id'] not in instance:
-                    #     instance[dd['instance_id']] = 1
-                    # else:
-                    #     instance[dd['instance_id']] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
@@ -144,35 +180,13 @@ class ArcfaceDataset(Dataset):
         for d in l_v:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                    # s_v.add(dd['instance_id'])
-                    # if dd['instance_id'] not in instance:
-                    #     instance[dd['instance_id']] = 1
-                    # else:
-                    #     instance[dd['instance_id']] += 1
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
                     self.images.append(t)
 
-        # id_set = s_i & s_v
-        # all_ids = set([])
-        # print(max(instance.values()))
-        # self.images = []
-        # for l in images:
-        #     if l[-1] in id_set and instance[l[-1]] > 10 and instance[l[-1]] < 20:
-        #         self.images.append(l)
-        #         all_ids.add(l[-1])
-        
-        # all_ids = sorted(list(all_ids))
-
-        # for i in all_ids:
-        #     self.clsDic[i] = len(self.clsDic)
-
         self.num_classes = len(self.clsDic)
-
-        # print(sorted(self.clsDic.items(), key=lambda x:x[1])[0])
-        
-        # self.images = self.images[:10000]
+        self.num_labels = len(set(self.instance2label.values()))
         print('Done')
 
         self.transform = transforms.Normalize(
@@ -193,7 +207,8 @@ class ArcfaceDataset(Dataset):
 
         img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
-        label = torch.tensor(self.clsDic[str(instance_id)])
+        instance = torch.tensor(self.clsDic[str(instance_id)])
+        label = torch.tensor(self.instance2label[str(instance_id)])
 
         if np.random.rand() < self.flip_x:
             img = img[:, ::-1, :].copy()
@@ -201,8 +216,9 @@ class ArcfaceDataset(Dataset):
         img = img.permute(2, 0, 1)
         
         img = self.transform(img)
-
-        return {'img':img, 'label':label}
+        # r = torch.randn(3, self.size[0], self.size[1])
+        # img = img + 0.1*r
+        return {'img':img, 'instance':instance, 'label':label}
 
 class TripletDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5):
@@ -449,16 +465,17 @@ class ValidationArcfaceDataset(Dataset):
                 continue
             l.append(instance)
             self.items.append(l)
+        self.length = len(self.items)
         print('Done')
         self.transform = transforms.Normalize(
             mean=[0.55574415, 0.51230767, 0.51123354], 
             std=[0.21303795, 0.21604613, 0.21273348])
     
     def __len__(self):
-        return len(self.items)
+        return len(self.items) * 2
 
     def __getitem__(self, index):
-        imgPath, vdoPath, instance = self.items[index]
+        imgPath, vdoPath, instance = self.items[index%self.length]
         img = np.load(os.path.join(self.root_dir, imgPath))
         vdo = np.load(os.path.join(self.root_dir, vdoPath))
         
@@ -472,6 +489,10 @@ class ValidationArcfaceDataset(Dataset):
         rh = (hv-self.size[0])//2
         rw = (wv-self.size[1])//2
         vdo = vdo[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+        if index >= self.length:
+            img = img[:, ::-1, :].copy()
+            vdo = vdo[:, ::-1, :].copy()
 
         img = torch.from_numpy(img)
         img = img.permute(2, 0, 1)
@@ -636,16 +657,16 @@ class TestDataset(Dataset):
         self.size = size
         self.root_dir = root_dir
         self.items = items
-
+        self.length = len(items)
         self.transform = transforms.Normalize(
             mean=[0.55574415, 0.51230767, 0.51123354], 
             std=[0.21303795, 0.21604613, 0.21273348])
 
     def __len__(self):
-        return len(self.items)
+        return len(self.items) * 2
 
     def __getitem__(self, index):
-        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index%self.length]
         if self.mode == 'image':
             img = cv2.imread(imgPath)
         else:
@@ -653,7 +674,9 @@ class TestDataset(Dataset):
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
             ret, img = cap.read()
             cap.release()
-        det = img[ymin:ymax, xmin:xmax, :].copy()
+        det = img[ymin:ymax, xmin:xmax, :]
+        if index >= self.length:
+            det = det[:, ::-1, :].copy()
         det = cv2.resize(det, self.size)
         det = cv2.cvtColor(det, cv2.COLOR_BGR2RGB)
         det = det.astype(np.float32) / 255

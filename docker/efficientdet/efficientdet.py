@@ -1,6 +1,8 @@
+import os
 import torch.nn as nn
 import torch
 import math
+import json
 from efficientdet.efficientnet import EfficientNet
 from efficientdet.utils import BBoxTransform, ClipBoxes, Anchors
 from efficientdet.loss import FocalLoss
@@ -171,6 +173,52 @@ class Classifier(nn.Module):
                                           self.num_classes)
         return output.contiguous().view(output.shape[0], -1, self.num_classes)
 
+class SentVec(nn.Module):
+    def __init__(self, embedding_size, root_dir='data'):
+        super(SentVec, self).__init__()
+        with open('TF_IDF.json', 'r') as f:
+            TI_dic = json.load(f)
+        max_size = len(TI_dic)
+        self.TI = torch.zeros(max_size).float().cuda()
+        for k in TI_dic.keys():
+            self.TI[int(k)] = TI_dic[k]
+        self.embedding = nn.Embedding(len(self.TI), embedding_size, padding_idx=0)
+        
+    def forward(self, words):
+        embeddings = self.embedding(words)
+        weight = self.TI[words]
+        weight /= (weight.sum(dim=1).view(-1, 1)+1e-8)
+        embeddings *= weight.view(-1, words.size(1), 1)
+        sentEmbeddings = embeddings.sum(dim=1)
+        return sentEmbeddings
+        
+
+class Instance(nn.Module):
+    def __init__(self, in_channels, num_anchors, num_layers, root_dir='data'):
+        super(Instance, self).__init__()
+        self.num_anchors = num_anchors
+        layers = []
+        for _ in range(num_layers):
+            layers.append(nn.Conv2d(in_channels*2, in_channels*2, kernel_size=3, stride=1, padding=1))
+            layers.append(nn.ReLU(True))
+        self.layers = nn.Sequential(*layers)
+        self.header = nn.Conv2d(in_channels*2, num_anchors, kernel_size=3, stride=1, padding=1)
+        self.act = nn.Sigmoid()
+        self.sentvec = SentVec(embedding_size=in_channels, root_dir=root_dir)
+
+    def forward(self, inputs, text):
+        b, c, w, h = inputs.size()
+        sent = self.sentvec(text)
+        sent = sent.repeat(1, w*h).view(b, w*h, sent.size(1))
+        sent = sent.permute(0, 2, 1).view(b, sent.size(2), w, h)
+        inputs = torch.cat([inputs, sent], dim=1)
+        inputs = self.layers(inputs)
+        inputs = self.header(inputs)
+        inputs = self.act(inputs)
+        inputs = inputs.permute(0, 2, 3, 1)
+        # print(inputs.size())
+        output = inputs.contiguous().view(inputs.shape[0], inputs.shape[1], inputs.shape[2], self.num_anchors, 1)
+        return output.contiguous().view(output.shape[0], -1, 1)
 
 class EfficientDet(nn.Module):
     def __init__(self, config):
@@ -178,20 +226,16 @@ class EfficientDet(nn.Module):
         self.is_training = config.is_training
         self.nms_threshold = config.nms_threshold
         self.cls_threshold = config.cls_threshold
+        self.instance_threshold = config.instance_threshold
         model_conf = EFFICIENTDET[config.network]
         self.num_channels = model_conf['W_bifpn']
         input_channels = model_conf['EfficientNet_output']
-        self.convs = []
+
         self.conv3 = nn.Conv2d(input_channels[0], self.num_channels, kernel_size=1, stride=1, padding=0)
         self.conv4 = nn.Conv2d(input_channels[1], self.num_channels, kernel_size=1, stride=1, padding=0)
         self.conv5 = nn.Conv2d(input_channels[2], self.num_channels, kernel_size=1, stride=1, padding=0)
         self.conv6 = nn.Conv2d(input_channels[3], self.num_channels, kernel_size=1, stride=1, padding=0)
         self.conv7 = nn.Conv2d(input_channels[4], self.num_channels, kernel_size=1, stride=1, padding=0)
-        self.convs.append(self.conv3)
-        self.convs.append(self.conv4)
-        self.convs.append(self.conv5)
-        self.convs.append(self.conv6)
-        self.convs.append(self.conv7)
 
         self.bifpn = nn.Sequential(*[BiFPN(self.num_channels) for _ in range(model_conf['D_bifpn'])])
 
@@ -201,7 +245,8 @@ class EfficientDet(nn.Module):
                                    num_layers=model_conf['D_class'])
         self.classifier = Classifier(in_channels=self.num_channels, num_anchors=self.anchors.num_anchors, num_classes=self.num_classes,
                                      num_layers=model_conf['D_class'])
-
+        self.instance = Instance(in_channels=self.num_channels, num_anchors=self.anchors.num_anchors, num_layers=model_conf['D_class'])
+        
         self.regressBoxes = BBoxTransform()
         self.clipBoxes = ClipBoxes()
         self.focalLoss = FocalLoss()
@@ -218,6 +263,9 @@ class EfficientDet(nn.Module):
 
         self.classifier.header.weight.data.fill_(0)
         self.classifier.header.bias.data.fill_(-math.log((1.0 - prior) / prior))
+
+        self.instance.header.weight.data.fill_(0)
+        self.instance.header.bias.data.fill_(-math.log((1.0 - prior) / prior))
 
         self.regressor.header.weight.data.fill_(0)
         self.regressor.header.bias.data.fill_(0)
@@ -237,26 +285,30 @@ class EfficientDet(nn.Module):
 
     def forward(self, inputs):
         if self.is_training:
-            img_batch, annotations = inputs
+            img_batch, annotations, text = inputs
         else:
-            img_batch = inputs
+            img_batch, text = inputs
 
         features = self.backbone_net(img_batch)[2:]
-        
-        for i, conv in enumerate(self.convs):
-            features[i] = conv(features[i])
+
+        features[0] = self.conv3(features[0])
+        features[1] = self.conv4(features[1])
+        features[2] = self.conv5(features[2])
+        features[3] = self.conv6(features[3])
+        features[4] = self.conv7(features[4])
 
         features = self.bifpn(features)
         
         regression = torch.cat([self.regressor(feature) for feature in features], dim=1)
         classification = torch.cat([self.classifier(feature) for feature in features], dim=1)
+        instance = torch.cat([self.instance(feature, text) for feature in features], dim=1)
 
         anchors = self.anchors(img_batch)
         # print(anchors.size())
-        
+        # print(instance.size())
         if self.is_training:
             # print(classification.size(), regression.size(), anchors.size(), annotations.size())
-            return self.focalLoss(classification, regression, anchors, annotations)
+            return self.focalLoss(instance, classification, regression, anchors, annotations)
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
             transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
@@ -265,6 +317,9 @@ class EfficientDet(nn.Module):
             # print(scores.size())
             # scores_over_thresh = (scores > 0.05)[:, :, 0]
             scores_over_thresh = (scores > self.cls_threshold)[:, :, 0]
+
+            instance[instance[:]>self.instance_threshold] = 1.0
+            instance[instance[:]<=self.instance_threshold] = 0.0
             # print(scores_over_thresh)
 
             output_list = []
@@ -272,9 +327,10 @@ class EfficientDet(nn.Module):
             for i in range(batch_size):
 
                 if scores_over_thresh[i, :].sum() == 0:
-                    output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 23), torch.zeros(0, 4)])
+                    output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 1), torch.zeros(0, 23), torch.zeros(0, 4)])
                     continue
-
+                
+                instance_i = instance[:, scores_over_thresh[i], :]
                 classification_i = classification[:, scores_over_thresh[i], :]
                 transformed_anchors_i = transformed_anchors[:, scores_over_thresh[i], :]
                 scores_i = scores[:, scores_over_thresh[i], :]
@@ -282,7 +338,7 @@ class EfficientDet(nn.Module):
                 anchors_nms_idx = nms(torch.cat([transformed_anchors_i, scores_i], dim=2)[i, :, :], self.nms_threshold)
                 
                 nms_scores, nms_class = classification_i[i, anchors_nms_idx, :].max(dim=1)
-                output_list.append([nms_scores, nms_class, classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
+                output_list.append([nms_scores, nms_class, instance_i[i, anchors_nms_idx, :], classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
                 # print(classification_i[i, anchors_nms_idx, :].size(), nms_class.size())
             return output_list
 
@@ -314,22 +370,28 @@ if __name__ == '__main__':
         parser.add_argument("--cls_threshold", type=float, default=0.3)
         parser.add_argument('--cls_2_threshold', type=float, default=0.5)
         parser.add_argument('--iou_threshold', type=float, default=0.4)
+        parser.add_argument('--instance_threshold', type=float, default=0.3)
         parser.add_argument('--prediction_dir', type=str, default="predictions/")
         parser.add_argument("--workers", type=int, default=8)
         args = parser.parse_args()
         return args
     config = get_args_efficientdet()
+
+    model = EfficientDet(config)
+    model.load_state_dict(torch.load('trained_models/efficientdet-d0.pth'))
+    # model.instance = Instance(in_channels=model.num_channels, num_anchors=model.anchors.num_anchors, num_layers=model.model_conf['D_class'])
+    # torch.save(model.state_dict(), 'trained_models/efficientdet-d0.pth')
     # def count_parameters(model):
     #     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    model = EfficientDet(config).cuda()
-    # model = EffNet.from_pretrained('efficientnet-b0')
-    # print(model)
-    a = torch.randn([3,3,512,512]).cuda()
-    model.set_is_training(False)
-    model.eval()
-    # b = torch.randn([3, 5, 5]).cuda()
-    # c3, c4, c5 = model(a)
-    print(model(a))
-    # print(print(len(model._blocks)))
+    # model = EfficientDet(config).cuda()
+    # # model = EffNet.from_pretrained('efficientnet-b0')
+    # # print(model)
+    # a = torch.randn([3,3,512,512]).cuda()
+    # model.set_is_training(False)
+    # model.eval()
+    # b = torch.randn([3, 5, 6]).cuda()
+    # # c3, c4, c5 = model(a)
+    # print(model(a))
+    # # print(print(len(model._blocks)))
     # print(c3.size(), c4.size(), c5.size())

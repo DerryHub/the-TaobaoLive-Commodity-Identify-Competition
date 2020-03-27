@@ -54,11 +54,12 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
     acc = 0
     rates_t = []
     rates_f = []
+    length = len(instances) // 2
     for i in tqdm(range(len(cos))):
         for j in argmax[i]:
             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
                 continue
-            if j == i:
+            if j%length == i%length:
                 acc +=1
                 rates_t.append(cos[i, j])
             else:
@@ -97,7 +98,7 @@ def evaluate(opt):
 
     if opt.network == 'resnet':
         model = ResNet(opt)
-        b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers)
+        b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers_r)
     elif opt.network == 'googlenet':
         model = GoogLeNet(opt)
         b_name = opt.network

@@ -10,31 +10,33 @@ def collater(data):
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
     scales = [s['scale'] for s in data]
+    text = [s['text'] for s in data]
 
     imgs = torch.from_numpy(np.stack(imgs, axis=0))
+    text = torch.stack(text, dim=0)
 
     max_num_annots = max(annot.shape[0] for annot in annots)
 
     if max_num_annots > 0:
 
-        annot_padded = torch.ones((len(annots), max_num_annots, 5)) * -1
+        annot_padded = torch.ones((len(annots), max_num_annots, 6)) * -1
 
         if max_num_annots > 0:
             for idx, annot in enumerate(annots):
                 if annot.shape[0] > 0:
                     annot_padded[idx, :annot.shape[0], :] = annot
     else:
-        annot_padded = torch.ones((len(annots), 1, 5)) * -1
+        annot_padded = torch.ones((len(annots), 1, 6)) * -1
 
     imgs = imgs.permute(0, 3, 1, 2)
 
-    return {'img': imgs, 'annot': annot_padded, 'scale': scales}
+    return {'img': imgs, 'annot': annot_padded, 'scale': scales, 'text': text}
 
 
 class Resizer(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample, common_size=512):
-        image, annots = sample['img'], sample['annot']
+        image, annots, text = sample['img'], sample['annot'], sample['text']
         height, width, _ = image.shape
         if height > width:
             scale = common_size / height
@@ -52,7 +54,12 @@ class Resizer(object):
 
         annots[:, :4] *= scale
 
-        return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots), 'scale': scale}
+        return {
+            'img': torch.from_numpy(new_image), 
+            'annot': torch.from_numpy(annots), 
+            'scale': scale, 
+            'text': text
+        }
 
 
 class Augmenter(object):
@@ -60,7 +67,7 @@ class Augmenter(object):
 
     def __call__(self, sample, flip_x=0.5):
         if np.random.rand() < flip_x:
-            image, annots = sample['img'], sample['annot']
+            image, annots, text = sample['img'], sample['annot'], sample['text']
             image = image[:, ::-1, :]
 
             rows, cols, channels = image.shape
@@ -73,7 +80,7 @@ class Augmenter(object):
             annots[:, 0] = cols - x2
             annots[:, 2] = cols - x_tmp
 
-            sample = {'img': image, 'annot': annots}
+            sample = {'img': image, 'annot': annots, 'text': text}
 
         return sample
 
@@ -85,9 +92,9 @@ class Normalizer(object):
         self.std = np.array([[[0.22700769, 0.23887326, 0.23833767]]])
 
     def __call__(self, sample):
-        image, annots = sample['img'], sample['annot']
+        image, annots, text = sample['img'], sample['annot'], sample['text']
 
-        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots}
+        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots, 'text': text}
 
 def iou(a, b):
     a = torch.clamp(a.long(), 0, 2000)

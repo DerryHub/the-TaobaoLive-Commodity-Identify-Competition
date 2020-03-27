@@ -3,7 +3,7 @@ import argparse
 def get_args_efficientdet():
     parser = argparse.ArgumentParser("EfficientDet")
     parser.add_argument("--image_size", type=int, default=512, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=8, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=20, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
@@ -25,44 +25,51 @@ def get_args_efficientdet():
     parser.add_argument("--cls_threshold", type=float, default=0.3)
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
+    parser.add_argument('--instance_threshold', type=float, default=0.3)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--GPUs", type=list, default=[0])
+
+    parser.add_argument("--imgORvdo", type=str, default='video', help='[image, video]')
     args = parser.parse_args()
     return args
 
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=112, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=100, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--batch_size", type=int, default=60, help="The number of images per batch")
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--num_classes", type=int, default=29522)
+    parser.add_argument("--num_classes", type=int, default=None)
+    parser.add_argument("--num_labels", type=int, default=None)
     parser.add_argument("--drop_ratio", type=float, default=0.1)
     parser.add_argument("--embedding_size", type=int, default=512)
     parser.add_argument('--resume', type=bool, default=True)
     parser.add_argument("--workers", type=int, default=24)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.5)
+    parser.add_argument("--m", type=float, default=0.1)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument('--threshold', type=float, default=0.3)
     parser.add_argument("--GPUs", type=list, default=[0])
-    parser.add_argument("--network", type=str, default='googlenet', 
-                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2]")
+    parser.add_argument("--network", type=str, default='densenet', 
+                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2, densenet]")
 
     # resnet config
-    parser.add_argument("--num_layers", type=int, default=152, help="[50, 100, 152]")
-    parser.add_argument("--mode", type=str, default='ir', help="[ir, ir_se]")
+    parser.add_argument("--num_layers_r", type=int, default=50, help="[50, 100, 152]")
+    parser.add_argument("--mode", type=str, default='ir_se', help="[ir, ir_se]")
 
     # googlenet config
 
     # inceptionv4 config
 
     # inceptionresnetv2 config
+
+    # densenet config
+    parser.add_argument("--num_layers_d", type=int, default=121, help="[121, 161, 169, 201]")
 
     args = parser.parse_args()
     return args

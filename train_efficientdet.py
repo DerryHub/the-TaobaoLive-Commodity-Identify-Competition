@@ -27,26 +27,27 @@ def train(opt):
                        "collate_fn": collater,
                        "num_workers": opt.workers}
 
-    test_params = {"batch_size": opt.batch_size * num_gpus * 4,
-                   "shuffle": False,
-                   "drop_last": False,
-                   "collate_fn": collater,
-                   "num_workers": opt.workers}
+    # test_params = {"batch_size": opt.batch_size * num_gpus * 4,
+    #                "shuffle": False,
+    #                "drop_last": False,
+    #                "collate_fn": collater,
+    #                "num_workers": opt.workers}
 
     training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
-                               transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+                               transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]),
+                               imgORvdo=opt.imgORvdo)
     training_generator = DataLoader(training_set, **training_params)
 
-    test_set = EfficientdetDataset(root_dir=opt.data_path, mode="validation",
-                           transform=transforms.Compose([Normalizer(), Resizer()]))
-    test_generator = DataLoader(test_set, **test_params)
+    # test_set = EfficientdetDataset(root_dir=opt.data_path, mode="validation",
+    #                        transform=transforms.Compose([Normalizer(), Resizer()]))
+    # test_generator = DataLoader(test_set, **test_params)
 
     opt.num_classes = training_set.num_classes
 
     model = EfficientDet(opt)
     if opt.resume:
         print('Loading model...')
-        model.load_state_dict(torch.load(os.path.join(opt.saved_path, opt.network+'.pth')))
+        model.load_state_dict(torch.load(os.path.join(opt.saved_path, opt.network+'_'+opt.imgORvdo+'.pth')))
 
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
@@ -57,6 +58,7 @@ def train(opt):
     model = nn.DataParallel(model, device_ids=device_ids)
 
     optimizer = AdamW(model.parameters(), opt.lr)
+    # optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), opt.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
     best_loss = np.inf
@@ -71,11 +73,16 @@ def train(opt):
         progress_bar = tqdm(training_generator)
         for iter, data in enumerate(progress_bar):
             optimizer.zero_grad()
-            cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
+            ins_loss, cls_loss, reg_loss = model([
+                data['img'].cuda().float(), 
+                data['annot'].cuda(), 
+                data['text'].cuda()
+            ])
 
+            ins_loss = ins_loss.mean()
             cls_loss = cls_loss.mean()
             reg_loss = reg_loss.mean()
-            loss = cls_loss + reg_loss
+            loss = cls_loss + reg_loss + ins_loss
             if loss == 0:
                 continue
             loss.backward()
@@ -86,46 +93,46 @@ def train(opt):
 
             progress_bar.set_description('Epoch: {}/{}. Iteration: {}/{}'.format(epoch + 1, opt.num_epochs, iter + 1, num_iter_per_epoch))
             
-            progress_bar.write('Cls loss: {:.5f}\tReg loss: {:.5f}\tBatch loss: {:.5f}\tTotal loss: {:.5f}'.format(
-                    cls_loss, reg_loss, loss, total_loss))
+            progress_bar.write('Ins loss: {:.5f}\tCls loss: {:.5f}\tReg loss: {:.5f}\tBatch loss: {:.5f}\tTotal loss: {:.5f}'.format(
+                    ins_loss, cls_loss, reg_loss, loss, total_loss))
 
         scheduler.step(np.mean(epoch_loss))
 
-        if epoch % opt.test_interval == 0:
-            model.eval()
-            loss_regression_ls = []
-            loss_classification_ls = []
-            loss_classification_2_ls = []
-            progress_bar = tqdm(test_generator)
-            progress_bar.set_description_str(' Evaluating')
-            for iter, data in enumerate(progress_bar):
-                with torch.no_grad():
-                    cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
+        # if epoch % opt.test_interval == 0:
+        #     model.eval()
+        #     loss_regression_ls = []
+        #     loss_classification_ls = []
+        #     loss_classification_2_ls = []
+        #     progress_bar = tqdm(test_generator)
+        #     progress_bar.set_description_str(' Evaluating')
+        #     for iter, data in enumerate(progress_bar):
+        #         with torch.no_grad():
+        #             cls_loss, reg_loss = model([data['img'].cuda().float(), data['annot'].cuda()])
 
-                    cls_loss = cls_loss.mean()
-                    reg_loss = reg_loss.mean()
+        #             cls_loss = cls_loss.mean()
+        #             reg_loss = reg_loss.mean()
 
-                    loss_classification_ls.append(float(cls_loss))
-                    loss_regression_ls.append(float(reg_loss))
+        #             loss_classification_ls.append(float(cls_loss))
+        #             loss_regression_ls.append(float(reg_loss))
 
-            cls_loss = np.mean(loss_classification_ls)
-            reg_loss = np.mean(loss_regression_ls)
-            loss = cls_loss + reg_loss 
+        #     cls_loss = np.mean(loss_classification_ls)
+        #     reg_loss = np.mean(loss_regression_ls)
+        #     loss = cls_loss + reg_loss 
 
-            print('Epoch: {}/{}. \nClassification loss: {:1.5f}. \tRegression loss: {:1.5f}. \tTotal loss: {:1.5f}'.format(
-                    epoch + 1, opt.num_epochs, cls_loss, reg_loss, np.mean(loss)))
+        #     print('Epoch: {}/{}. \nClassification loss: {:1.5f}. \tRegression loss: {:1.5f}. \tTotal loss: {:1.5f}'.format(
+        #             epoch + 1, opt.num_epochs, cls_loss, reg_loss, np.mean(loss)))
 
-            if loss + opt.es_min_delta < best_loss:
-                print('Saving model...')
-                best_loss = loss
-                best_epoch = epoch
-                torch.save(model.module.state_dict(), os.path.join(opt.saved_path, opt.network+'.pth'))
-                # torch.save(model, os.path.join(opt.saved_path, opt.network+'.pth'))
+        if total_loss + opt.es_min_delta < best_loss:
+            print('Saving model...')
+            best_loss = total_loss
+            best_epoch = epoch
+            torch.save(model.module.state_dict(), os.path.join(opt.saved_path, opt.network+'_'+opt.imgORvdo+'.pth'))
+            # torch.save(model, os.path.join(opt.saved_path, opt.network+'.pth'))
 
             # Early stopping
-            if epoch - best_epoch > opt.es_patience > 0:
-                print("Stop training at epoch {}. The lowest loss achieved is {}".format(epoch, loss))
-                break
+            # if epoch - best_epoch > opt.es_patience > 0:
+            #     print("Stop training at epoch {}. The lowest loss achieved is {}".format(epoch, loss))
+            #     break
 
 
 if __name__ == "__main__":
