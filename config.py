@@ -55,7 +55,7 @@ def get_args_arcface():
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument('--threshold', type=float, default=0.3)
     parser.add_argument("--GPUs", type=list, default=[0])
-    parser.add_argument("--network", type=str, default='densenet', 
+    parser.add_argument("--network", type=str, default='resnet', 
                         help="[resnet, googlenet, inceptionv4, inceptionresnetv2, densenet]")
 
     # resnet config

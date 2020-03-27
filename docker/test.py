@@ -56,14 +56,15 @@ def pre_bockbone(dataset, model, opt_a):
     
     generator = DataLoader(dataset, **params)
 
-    features_arr = np.zeros((0, opt_a.embedding_size))
-    boxes_arr = np.zeros((0, 4))
+    length = len(dataset)
+    features_arr = np.zeros((length, opt_a.embedding_size))
+    boxes_arr = np.zeros((length, 4))
     IDs = []
     frames = []
     classes = []
 
     progress_bar = tqdm(generator)
-    for data in progress_bar:
+    for i, data in enumerate(progress_bar):
         img = data['img'].cuda()
         imgID = data['imgID']
         frame = data['frame']
@@ -76,8 +77,10 @@ def pre_bockbone(dataset, model, opt_a):
         classes += cs
         IDs += imgID
         frames += frame
-        features_arr = np.append(features_arr, features, axis=0)
-        boxes_arr = np.append(boxes_arr, box, axis=0)
+        features_arr[i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = features
+        boxes_arr[i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = box
+        # features_arr = np.append(features_arr, features, axis=0)
+        # boxes_arr = np.append(boxes_arr, box, axis=0)
 
     return features_arr, boxes_arr, IDs, frames, classes
 
@@ -85,7 +88,7 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
     vdo2img = []
     length = vdo_features.shape[0]
     print('calculating cosine similarity...')
-    for index in tqdm(range(1+length//1000)):
+    for index in tqdm(range(1+(length-1)//1000)):
         if index < length//1000:
             cos = cosine_similarity(vdo_features[1000*index:1000*(index+1)], img_features)
         else:
@@ -270,16 +273,17 @@ def test(opt_a, opt_e):
         cos = cosine_similarity(vdo_f, img_f)
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
-            # for simis_i in range(len(simis)):
-            simis_i = np.argmax(simis)
-            if simis[simis_i] < 0:
-                continue
-            img_i = img_index[simis_i]
-            d = {}
-            d['img_name'] = img_frames[img_i]
-            d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
-            d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
-            result[vdo_id]['result'].append(d)
+            
+            simis_is = np.argsort(-simis)[:3]
+            for simis_i in simis_is:
+                if simis[simis_i] < 0.2:
+                    break
+                img_i = img_index[simis_i]
+                d = {}
+                d['img_name'] = img_frames[img_i]
+                d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
+                d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
+                result[vdo_id]['result'].append(d)
 
         if len(result[vdo_id]['result']) == 0:
             del result[vdo_id]

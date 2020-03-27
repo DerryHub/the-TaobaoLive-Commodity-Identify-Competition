@@ -31,8 +31,14 @@ N_GT = [10000]*3
 for k in tqdm(dic.keys()):
     if k == dic[k]['item_id']:
         N_TP[0] += 1
-        flag_1 = False
-        flag_2 = False
+        
+        vdo_instance_dic_frame = {}
+        vdo_instance_dic_iou = {}
+        for annotation in vdo_dic[k+ '_'+str(dic[k]['frame_index'])]:
+            instance = annotation['instance_id']
+            if instance > 0:
+                vdo_instance_dic_frame[instance] = False
+                vdo_instance_dic_iou[instance] = False
         for result in dic[k]['result']:
             img_box = []
             instances = []
@@ -42,28 +48,18 @@ for k in tqdm(dic.keys()):
                     instances.append(instance)
                     img_box.append(torch.from_numpy(np.array(annotation['box'])))
 
-            flag_1 = True
-            flag_2 = True
-            f = True
-            for annotation in vdo_dic[k+ '_'+str(dic[k]['frame_index'])]:
-                instance = annotation['instance_id']
-                if instance not in instances:
-                    flag_1 = False
-                    flag_2 = False
-                    f = False
-                else:
+            for instance in vdo_instance_dic_frame.keys():
+                if instance in instances:
+                    vdo_instance_dic_frame[instance] = True
                     for box in img_box:
                         IOU = iou(torch.tensor(result['item_box']).unsqueeze(0), box.unsqueeze(0))
-                        if IOU > 0.5 and f:
-                            flag_2 = True
+                        if IOU > 0.5:
+                            vdo_instance_dic_iou[instance] = True
                             break
-                        flag_2 = False
-                    if flag_2 == False:
-                        f = False
-                    
-        if flag_1:
+
+        if sum(vdo_instance_dic_frame.values()) == len(vdo_instance_dic_frame):
             N_TP[1] += 1
-        if flag_2:
+        if sum(vdo_instance_dic_iou.values()) == len(vdo_instance_dic_iou):
             N_TP[2] += 1
 
 
