@@ -147,11 +147,21 @@ def test(opt_a, opt_e):
         transform=transforms.Compose([Normalizer_Test(), Resizer_Test()]))
 
     opt_e.num_classes = dataset_img.num_classes
-    efficientdet = EfficientDet(opt_e)
-    efficientdet.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'.pth')))
-    efficientdet.cuda()
-    efficientdet.set_is_training(False)
-    efficientdet.eval()
+    
+    efficientdet_image = EfficientDet(opt_e)
+    efficientdet_video = EfficientDet(opt_e)
+    
+    efficientdet_image.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_image'+'.pth')))
+    efficientdet_video.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_video'+'.pth')))
+    
+    efficientdet_image.cuda()
+    efficientdet_video.cuda()
+
+    efficientdet_image.set_is_training(False)
+    efficientdet_video.set_is_training(False)
+
+    efficientdet_image.eval()
+    efficientdet_video.eval()
 
     if opt_a.network == 'resnet':
         backbone = ResNet(opt_a)

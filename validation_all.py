@@ -128,11 +128,22 @@ def validate(opt_a, opt_e):
     opt_e.batch_size *= 4
 
     opt_e.num_classes = dataset_img.num_classes
-    efficientdet = EfficientDet(opt_e)
-    efficientdet.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'.pth')))
-    efficientdet.cuda()
-    efficientdet.set_is_training(False)
-    efficientdet.eval()
+
+    efficientdet_image = EfficientDet(opt_e)
+    efficientdet_video = EfficientDet(opt_e)
+    
+    efficientdet_image.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_image'+'.pth')))
+    efficientdet_video.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_video'+'.pth')))
+    
+    efficientdet_image.cuda()
+    efficientdet_video.cuda()
+
+    efficientdet_image.set_is_training(False)
+    efficientdet_video.set_is_training(False)
+
+    efficientdet_image.eval()
+    efficientdet_video.eval()
+
 
     if opt_a.network == 'resnet':
         backbone = ResNet(opt_a)
@@ -155,8 +166,8 @@ def validate(opt_a, opt_e):
     backbone.eval()
     
     print('predicting boxs...')
-    imgs = pre_efficient(dataset_img, efficientdet, opt_e, cls_k)
-    vdos = pre_efficient(dataset_vdo, efficientdet, opt_e, cls_k)
+    imgs = pre_efficient(dataset_img, efficientdet_image, opt_e, cls_k)
+    vdos = pre_efficient(dataset_vdo, efficientdet_video, opt_e, cls_k)
     
     dataset_det_img = ValidationDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size))
     dataset_det_vdo = ValidationDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size))
