@@ -120,15 +120,15 @@ class Normalizer_Test(object):
         self.std = np.array([[[0.22700769, 0.23887326, 0.23833767]]])
 
     def __call__(self, sample):
-        image = sample['img']
+        image, text = sample['img'], sample['text']
 
-        return {'img': ((image.astype(np.float32) - self.mean) / self.std)}
+        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'text': text}
 
 
 class Resizer_Test(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample, common_size=512):
-        image = sample['img']
+        image, text = sample['img'], sample['text']
         height, width, _ = image.shape
         if height > width:
             scale = common_size / height
@@ -144,17 +144,28 @@ class Resizer_Test(object):
         new_image = np.zeros((common_size, common_size, 3))
         new_image[0:resized_height, 0:resized_width] = image
 
-        return {'img': torch.from_numpy(new_image), 'scale': scale}
+        return {'img': torch.from_numpy(new_image), 'scale': scale, 'text': text}
 
 def collater_test(data):
     imgs = [s['img'] for s in data]
     scales = [s['scale'] for s in data]
+    text = [s['text'] for s in data]
 
     imgs = torch.from_numpy(np.stack(imgs, axis=0))
+    text = torch.stack(text, dim=0)
 
     imgs = imgs.permute(0, 3, 1, 2)
 
-    return {'img': imgs, 'scale': scales}
+    return {'img': imgs, 'scale': scales, 'text': text}
+
+def collater_HardTriplet(data):
+    imgs = [s['img'] for s in data]
+    instances = [s['instance'] for s in data]
+
+    imgs = torch.cat(imgs, dim=0)
+    instances = torch.cat(instances, dim=0)
+
+    return {'img': imgs, 'instance': instances}
 
 class TripletFocalLoss():
     def __init__(self, alpha, gamma):
@@ -173,9 +184,7 @@ class TripletFocalLoss():
         return distance
     
 class TripletLoss():
-    def __init__(self, alpha, gamma, threshold):
-        self.alpha = alpha
-        self.gamma = gamma
+    def __init__(self, threshold):
         self.threshold = threshold
 
     def __call__(self, feature_q, feature_p, feature_n):
@@ -189,6 +198,74 @@ class TripletLoss():
         distance = torch.sum((f_1-f_2)**2, dim=1) / 4
         return distance
 
+def hard_example_mining(dist_mat, labels, return_inds=False):
+    """For each anchor, find the hardest positive and negative sample.
+    Args:
+        dist_mat: pytorch Variable, pair wise distance between samples, shape [N, N]
+        labels: pytorch LongTensor, with shape [N]
+        return_inds: whether to return the indices. Save time if `False`(?)
+    Returns:
+        dist_ap: pytorch Variable, distance(anchor, positive); shape [N]
+        dist_an: pytorch Variable, distance(anchor, negative); shape [N]
+        p_inds: pytorch LongTensor, with shape [N]; 
+        indices of selected hard positive samples; 0 <= p_inds[i] <= N - 1
+        n_inds: pytorch LongTensor, with shape [N];
+        indices of selected hard negative samples; 0 <= n_inds[i] <= N - 1
+    NOTE: Only consider the case in which all labels have same num of samples, 
+        thus we can cope with all anchors in parallel.
+    """
+
+    assert len(dist_mat.size()) == 2
+    assert dist_mat.size(0) == dist_mat.size(1)
+    N = dist_mat.size(0)
+
+    # shape [N, N]
+    is_pos = labels.expand(N, N).eq(labels.expand(N, N).t())
+    is_neg = labels.expand(N, N).ne(labels.expand(N, N).t())
+
+    # `dist_ap` means distance(anchor, positive)
+    # both `dist_ap` and `relative_p_inds` with shape
+    dist_ap, relative_p_inds = torch.max(dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True)
+    # `dist_an` means distance(anchor, negative)
+    # both `dist_an` and `relative_n_inds` with shape [N, 1]
+    dist_an, relative_n_inds = torch.min(
+        dist_mat[is_neg].contiguous().view(N, -1), 1, keepdim=True)
+    # shape [N]
+
+    dist_ap = dist_ap.squeeze(1)
+    dist_an = dist_an.squeeze(1)
+
+    if return_inds:
+        # shape [N, N]
+        ind = (labels.new().resize_as_(labels)
+            .copy_(torch.arange(0, N).long())
+            .unsqueeze( 0).expand(N, N))
+        # shape [N, 1]
+        p_inds = torch.gather(
+        ind[is_pos].contiguous().view(N, -1), 1, relative_p_inds.data)
+        n_inds = torch.gather(
+        ind[is_neg].contiguous().view(N, -1), 1, relative_n_inds.data)
+        # shape [N]
+        p_inds = p_inds.squeeze(1)
+        n_inds = n_inds.squeeze(1)
+        return dist_ap, dist_an, p_inds, n_inds
+
+    return dist_ap, dist_an
+
+class HardTripletLoss:
+    def __init__(self, threshold):
+        self.threshold = threshold
+    
+    def __call__(self, features, instances):
+        dis = 1 - torch.mm(features, features.t())
+        dist_ap, dist_an = hard_example_mining(dis, instances)
+        loss = F.relu(dist_ap-dist_an+self.threshold)
+        loss = torch.mean(loss)
+        # argmin = torch.argmin(dis, dim=1)
+        _, argmin = torch.topk(dis, 2, dim=1, largest=False)
+        argmin_2 = argmin[:, -1]
+        acc = (instances[argmin_2]==instances).sum().float()
+        return loss, acc
 
 class TripletAccuracy():
     def __call__(self, feature_q, feature_p, feature_n):
@@ -333,8 +410,8 @@ class AdamW(Optimizer):
         return loss
 
 if __name__ == "__main__":
-    cost = TripletLoss(0.25, 1.5, 0.2)
-    a = torch.tensor([[1,0.],[0.8,0.6]])
+    cost = HardTripletLoss(0.5)
+    a = torch.tensor([[1,0.],[1.1,0],[0.8,0.6], [0.8,0.7]])
     b = torch.tensor([[1,0.],[0.8,0.6]])
-    c = torch.tensor([[-1,0], [1,0]])
-    print(cost(a,b,c))
+    c = torch.tensor([0,0,1,1])
+    print(cost(a, c))

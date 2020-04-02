@@ -11,10 +11,10 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.head import Arcface, LinearLayer
-from dataset import TripletDataset
+from dataset import HardTripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
-from utils import TripletLoss, TripletAccuracy, TripletFocalLoss, AdamW
+from utils import HardTripletLoss, AdamW, collater_HardTriplet
 import numpy as np
 from utils import separate_bn_paras
 
@@ -31,10 +31,12 @@ def train(opt):
     training_params = {"batch_size": opt.batch_size * num_gpus,
                         "shuffle": True,
                         "drop_last": True,
+                        "collate_fn": collater_HardTriplet,
                         "num_workers": opt.workers}
 
-    training_set = TripletDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
-    training_generator = DataLoader(training_set, **training_params)
+    training_set = HardTripletDataset(
+        root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
+    training_generator = DataLoader(training_set, **training_params, )
 
     opt.num_classes = training_set.num_classes
 
@@ -93,8 +95,7 @@ def train(opt):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, verbose=True)
 
     cost_arcface = nn.CrossEntropyLoss()
-    cost = TripletLoss(opt.threshold)
-    accuracy = TripletAccuracy()
+    cost = HardTripletLoss(opt.threshold)
 
     best_loss = np.inf
 
@@ -104,47 +105,27 @@ def train(opt):
         backbone.train()
         epoch_loss = []
         progress_bar = tqdm(training_generator)
-        total_p = 0
-        total_n = 0
-        acc_p = 0
-        acc_n = 0
         total = 0
-        acc = 0
+        acc_t = 0
+        acc_a = 0
         for iter, data in enumerate(progress_bar):
             optimizer.zero_grad()
 
-            img_q = data['img_q'].cuda()
-            img_p = data['img_p'].cuda()
-            img_n = data['img_n'].cuda()
-            img_q_instance = data['img_q_instance'].cuda()
-            img_p_instance = data['img_p_instance'].cuda()
-            img_n_instance = data['img_n_instance'].cuda()
+            img = data['img'].cuda()
+            instance = data['instance'].cuda()
 
-            embedding_q = backbone(img_q)
-            embedding_p = backbone(img_p)
-            embedding_n = backbone(img_n)
+            embedding = backbone(img)
 
-            output_q = head([embedding_q, img_q_instance])
-            output_p = head([embedding_p, img_p_instance])
-            output_n = head([embedding_n, img_n_instance])
+            output = head([embedding, instance])
 
-            loss_1 = cost(embedding_q, embedding_p, embedding_n)
-            loss_2_q = cost_arcface(output_q, img_q_instance)
-            loss_2_p = cost_arcface(output_p, img_p_instance)
-            loss_2_n = cost_arcface(output_n, img_n_instance)
+            loss_1, acc_ = cost(embedding, instance)
+            loss_2 = cost_arcface(output, instance)
 
-            total += embedding_q.size(0) *3
-            acc += (torch.argmax(output_q, dim=1)==img_q_instance).sum().float()
-            acc += (torch.argmax(output_p, dim=1)==img_p_instance).sum().float()
-            acc += (torch.argmax(output_n, dim=1)==img_n_instance).sum().float()
+            total += instance.size(0)
+            acc_a += (torch.argmax(output, dim=1)==instance).sum().float()
+            acc_t += acc_
 
-            acc_p_, acc_n_, total_p_, total_n_ = accuracy(embedding_q, embedding_p, embedding_n)
-            acc_p += acc_p_
-            acc_n += acc_n_
-            total_p += total_p_
-            total_n += total_n_
-            
-            loss = loss_1 + (loss_2_q + loss_2_p + loss_2_n) / 3
+            loss = loss_1 + loss_2
             loss.backward()
             optimizer.step()
             epoch_loss.append(float(loss))
@@ -153,8 +134,8 @@ def train(opt):
             progress_bar.set_description('Epoch: {}/{}. Iteration: {}/{}'.format(epoch + 1, opt.num_epochs, iter + 1, num_iter_per_epoch))
             
             progress_bar.write(
-                'Batch loss: {:.5f}\tTotal loss: {:.5f}\tAccuracy pos: {:.5f}\tAccuracy neg: {:.5f}\tAccuracy: {:.5f}'.format(
-                loss, total_loss, acc_p/total_p, acc_n/total_n, acc/total))
+                'Batch loss: {:.5f}\tTotal loss: {:.5f}\tAccuracy tri: {:.5f}\tAccuracy arc: {:.5f}'.format(
+                loss, total_loss, acc_t/total, acc_a/total))
 
         scheduler.step(np.mean(epoch_loss))
 

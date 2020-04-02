@@ -16,7 +16,7 @@ from joint_bayesian.JointBayesian import verify
 from tqdm import tqdm
 import json
 
-def pre_efficient(dataset, model, opt_e, cls_k):
+def pre_efficient(dataset, model, opt_e, cls_k, ins_f=True):
     params = {"batch_size": opt_e.batch_size,
                     "shuffle": False,
                     "drop_last": False,
@@ -28,16 +28,18 @@ def pre_efficient(dataset, model, opt_e, cls_k):
     for i, data in enumerate(progress_bar):
         scale = data['scale']
         with torch.no_grad():
-            output_list = model(data['img'].cuda().float())
+            output_list = model([data['img'].cuda().float(), data['text'].cuda()])
         for j, output in enumerate(output_list):
             imgPath, imgID, frame = dataset.getImageInfo(i*opt_e.batch_size+j)
-            scores, labels, all_labels, boxes = output
+            scores, labels, instances, all_labels, boxes = output
             if cls_k:
                 argmax = np.argpartition(all_labels.cpu(), kth=-cls_k, axis=1)[:, -cls_k:]
             else:
                 argmax = -np.ones([len(all_labels), 1])
             boxes /= scale[j]
             for box_id in range(boxes.shape[0]):
+                if instances[box_id, 0] == 0 and ins_f:
+                    continue
                 pred_prob = float(scores[box_id])
                 if pred_prob < opt_e.cls_threshold:
                     break
@@ -54,14 +56,15 @@ def pre_bockbone(dataset, model, opt_a):
     
     generator = DataLoader(dataset, **params)
 
-    features_arr = np.zeros((0, opt_a.embedding_size))
-    boxes_arr = np.zeros((0, 4))
+    length = len(dataset)
+    features_arr = np.zeros((length, opt_a.embedding_size))
+    boxes_arr = np.zeros((length, 4))
     IDs = []
     frames = []
     classes = []
 
     progress_bar = tqdm(generator)
-    for data in progress_bar:
+    for i, data in enumerate(progress_bar):
         img = data['img'].cuda()
         imgID = data['imgID']
         frame = data['frame']
@@ -74,16 +77,18 @@ def pre_bockbone(dataset, model, opt_a):
         classes += cs
         IDs += imgID
         frames += frame
-        features_arr = np.append(features_arr, features, axis=0)
-        boxes_arr = np.append(boxes_arr, box, axis=0)
+        features_arr[i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = features
+        boxes_arr[i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = box
+        # features_arr = np.append(features_arr, features, axis=0)
+        # boxes_arr = np.append(boxes_arr, box, axis=0)
 
     return features_arr, boxes_arr, IDs, frames, classes
 
-def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, vdo_classes, img_classes, k):
+def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
     vdo2img = []
     length = vdo_features.shape[0]
     print('calculating cosine similarity...')
-    for index in tqdm(range(1+length//1000)):
+    for index in tqdm(range(1+(length-1)//1000)):
         if index < length//1000:
             cos = cosine_similarity(vdo_features[1000*index:1000*(index+1)], img_features)
         else:
@@ -94,7 +99,7 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, vdo_clas
         for i in range(argmax.shape[0]):
             # d = {}
             for am in argmax[i, :]:
-                if cos[i, am] > 0 and len(set(vdo_classes[i+1000*index]) & set(img_classes[am])) > 0:
+                if cos[i, am] > 0:
                     vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], cos[i, am], i+1000*index, am])
             #         if img_IDs[am] not in d:
             #             d[img_IDs[am]] = [cos[i, am], cos[i, am], am]
@@ -119,7 +124,7 @@ def joint_bayesian(opt, vdo_features, img_features, vdo_IDs, img_IDs, k):
 
     vdo2img = []
     length = vdo_features.shape[0]
-    for index in tqdm(range(1+length//1000)):
+    for index in tqdm(range(1+(length-1)//1000)):
         if index < length//1000:
             scores = verify(A, G, vdo_features[1000*index:1000*(index+1)], img_features)
         else:
@@ -136,7 +141,7 @@ def joint_bayesian(opt, vdo_features, img_features, vdo_IDs, img_IDs, k):
 def test(opt_a, opt_e):
     k = 2
     cls_k = 3
-
+    
     dataset_img = TestImageDataset(
         root_dir=opt_e.data_path,
         dir_list=['validation_dataset_part1', 'validation_dataset_part2'],
@@ -146,19 +151,28 @@ def test(opt_a, opt_e):
         dir_list=['validation_dataset_part1', 'validation_dataset_part2'],
         transform=transforms.Compose([Normalizer_Test(), Resizer_Test()]))
 
-    opt_e.batch_size *= 4
-    opt_a.batch_size *= 4
-    
     opt_e.num_classes = dataset_img.num_classes
-    efficientdet = EfficientDet(opt_e)
-    efficientdet.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'.pth')))
-    efficientdet.cuda()
-    efficientdet.set_is_training(False)
-    efficientdet.eval()
+    
+    opt_e.imgORvdo = 'image'
+    efficientdet_image = EfficientDet(opt_e)
+    opt_e.imgORvdo = 'video'
+    efficientdet_video = EfficientDet(opt_e)
+    
+    efficientdet_image.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_image'+'.pth')))
+    efficientdet_video.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_video'+'.pth')))
+    
+    efficientdet_image.cuda()
+    efficientdet_video.cuda()
+
+    efficientdet_image.set_is_training(False)
+    efficientdet_video.set_is_training(False)
+
+    efficientdet_image.eval()
+    efficientdet_video.eval()
 
     if opt_a.network == 'resnet':
         backbone = ResNet(opt_a)
-        b_name = opt_a.network+'_'+opt_a.mode+'_{}'.format(opt_a.num_layers)
+        b_name = opt_a.network+'_'+opt_a.mode+'_{}'.format(opt_a.num_layers_r)
     elif opt_a.network == 'googlenet':
         backbone = GoogLeNet(opt_a)
         b_name = opt_a.network
@@ -177,8 +191,8 @@ def test(opt_a, opt_e):
     backbone.eval()
     
     print('predicting boxs...')
-    imgs = pre_efficient(dataset_img, efficientdet, opt_e, cls_k)
-    vdos = pre_efficient(dataset_vdo, efficientdet, opt_e, cls_k)
+    # imgs = pre_efficient(dataset_img, efficientdet_image, opt_e, cls_k, ins_f=True)
+    vdos = pre_efficient(dataset_vdo, efficientdet_video, opt_e, cls_k, ins_f=True)
     
     dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
     dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
@@ -200,7 +214,8 @@ def test(opt_a, opt_e):
         len(vdo_frames), 
         len(vdo_classes)]))==1
 
-    vdo2img = cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, vdo_classes, img_classes, k)
+    vdo2img = cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k)
+    # vdo2img = joint_bayesian(opt_a, vdo_features, img_features, vdo_IDs, img_IDs, k)
 
     vdo2img_d = {}
     print('merging videos...')
@@ -262,31 +277,20 @@ def test(opt_a, opt_e):
         cos = cosine_similarity(vdo_f, img_f)
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
-            # simis_i = np.argmax(simis)
-            arg_simis = np.argsort(-np.array(simis))
-            for simis_i in arg_simis:
-                if simis[simis_i] > 0 and len(set(vdo_classes[index]) & set(img_classes[img_index[simis_i]])) > 0:
+            
+            simis_is = np.argsort(-np.array(simis))[:3]
+            for simis_i in simis_is:
+                if simis[simis_i] < 0.2:
                     break
-                simis_i = None
-            if simis_i is None:
-                continue
-            # if simis[simis_i] < 0:
-            #     continue
-            img_i = img_index[simis_i]
-            d = {}
-            d['img_name'] = img_frames[img_i]
-            d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
-            d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
-            result[vdo_id]['result'].append(d)
-        
+                img_i = img_index[simis_i]
+                d = {}
+                d['img_name'] = img_frames[img_i]
+                d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
+                d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
+                result[vdo_id]['result'].append(d)
+
         if len(result[vdo_id]['result']) == 0:
             del result[vdo_id]
-        # l = sorted(l, key=lambda x:x[0], reverse=True)
-        # d = {}
-        # d['img_name'] = img_frames[l[0][1]]
-        # d['item_box'] = list(map(int, img_boxes[l[0][1]].tolist()))
-        # d['frame_box'] = list(map(int, vdo_boxes[l[0][2]].tolist()))
-        # result[vdo_id]['result'].append(d)
 
     print(len(result))
 

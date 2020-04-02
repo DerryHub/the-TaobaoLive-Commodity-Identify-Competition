@@ -35,7 +35,9 @@ def train(opt):
 
     training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
                                transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]),
-                               imgORvdo=opt.imgORvdo)
+                               imgORvdo=opt.imgORvdo, 
+                               maxLen=opt.max_position_embeddings,
+                               PAD=opt.PAD)
     training_generator = DataLoader(training_set, **training_params)
 
     # test_set = EfficientdetDataset(root_dir=opt.data_path, mode="validation",
@@ -43,7 +45,8 @@ def train(opt):
     # test_generator = DataLoader(test_set, **test_params)
 
     opt.num_classes = training_set.num_classes
-
+    opt.vocab_size = training_set.vocab_size
+    
     model = EfficientDet(opt)
     if opt.resume:
         print('Loading model...')

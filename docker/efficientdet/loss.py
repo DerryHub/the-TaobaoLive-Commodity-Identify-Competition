@@ -70,20 +70,22 @@ class FocalLoss(nn.Module):
                 targets_instance = targets_instance.cuda()
 
             targets[torch.lt(IoU_max, 0.4), :] = 0
-            targets_instance[torch.lt(IoU_max, 0.4), :] = 0
+            # targets_instance[torch.lt(IoU_max, 0.4), :] = 0
 
             positive_indices = torch.ge(IoU_max, 0.5)
+            positive_indices_instance = torch.ge(IoU_max, 0.3)
             # print(positive_indices.size(), targets.size())
             # print(bbox_annotation.size())
 
             num_positive_anchors = positive_indices.sum()
+            num_positive_anchors_instance = positive_indices_instance.sum()
 
             assigned_annotations = bbox_annotation[IoU_argmax, :]
 
             # print(positive_indices_instance.size())
             # print((positive_indices & (assigned_annotations[:, 5] == 1)).size())
-            targets_instance[positive_indices & (assigned_annotations[:, 5] == 1), :] = 1
-            targets_instance[positive_indices & (assigned_annotations[:, 5] == 0), :] = 0
+            targets_instance[positive_indices_instance & (assigned_annotations[:, 5] == 1), :] = 1
+            targets_instance[positive_indices_instance & (assigned_annotations[:, 5] == 0), :] = 0
             # print(num_positive_anchors, (positive_indices & (assigned_annotations[:, 5] == 1)).size())
 
             targets[positive_indices, :] = 0
@@ -121,7 +123,7 @@ class FocalLoss(nn.Module):
             instance_loss = torch.where(torch.ne(targets_instance, -1.0), instance_loss, zeros_instance)
 
             classification_losses.append(cls_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
-            instance_losses.append(instance_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
+            instance_losses.append(instance_loss.sum() / torch.clamp(num_positive_anchors_instance.float(), min=1.0))
 
             if positive_indices.sum() > 0:
                 # 正样本对应的annotations

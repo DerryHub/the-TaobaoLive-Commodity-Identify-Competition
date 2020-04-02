@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import json
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import cv2
 import random
@@ -19,6 +19,7 @@ class Text2Num:
             self.vocab = json.load(f)
         self.PAD = PAD
         self.maxLen = maxLen
+        self.vocab_size = len(self.vocab)
 
     def __call__(self, text):
         words = jieba.cut(text, cut_all=False, HMM=True)
@@ -47,7 +48,7 @@ class EfficientdetDataset(Dataset):
         self.root_dir = root_dir
         self.transform = transform
         text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
-
+        self.vocab_size = text2num.vocab_size
         label_file = 'label.json'
         with open(os.path.join(root_dir, label_file), 'r') as f:
             self.labelDic = json.load(f)
@@ -105,8 +106,8 @@ class EfficientdetDataset(Dataset):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
 
-        annotations = np.zeros((0, 6))
-        for annotationDic in annotationsList:
+        annotations = np.zeros((len(annotationsList), 6))
+        for i, annotationDic in enumerate(annotationsList):
             annotation = np.zeros((1, 6))
             annotation[0, :4] = annotationDic['box']
             annotation[0, 4] = annotationDic['label']
@@ -114,7 +115,8 @@ class EfficientdetDataset(Dataset):
                 annotation[0, 5] = 1
             else:
                 annotation[0, 5] = 0
-            annotations = np.append(annotations, annotation, axis=0)
+            annotations[i:i+1, :] = annotation
+            # annotations = np.append(annotations, annotation, axis=0)
         
         sample = {'img': img, 'annot': annotations, 'text': text}
         if self.transform:
@@ -141,7 +143,7 @@ class EfficientdetDataset(Dataset):
 '''
 
 class ArcfaceDataset(Dataset):
-    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5):
+    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, maxLen=64, PAD=0):
         assert mode in ['train']
 
         self.root_dir = root_dir
@@ -153,10 +155,23 @@ class ArcfaceDataset(Dataset):
         savePath = mode + '_instance'
         self.savePath = os.path.join(root_dir, savePath)
 
+        text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
+
         with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
             d_i = json.load(f)
         with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
             d_v = json.load(f)
+
+        with open(os.path.join(root_dir, img_tat+'_text.json'), 'r') as f:
+            self.textDic_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_text.json'), 'r') as f:
+            self.textDic_v = json.load(f)
+        
+        for k in self.textDic_i.keys():
+            self.textDic_i[k] = text2num(self.textDic_i[k])
+        for k in self.textDic_v.keys():
+            self.textDic_v[k] = text2num(self.textDic_v[k])
 
         l_i = d_i['annotations']
         l_v = d_v['annotations']
@@ -175,6 +190,8 @@ class ArcfaceDataset(Dataset):
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
+                    t.append(d['img_name'].split('_')[0])
+                    t.append('image')
                     self.images.append(t)
 
         for d in l_v:
@@ -183,6 +200,8 @@ class ArcfaceDataset(Dataset):
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
                     t.append(dd['instance_id'])
+                    t.append(d['img_name'].split('_')[0])
+                    t.append('video')
                     self.images.append(t)
 
         self.num_classes = len(self.clsDic)
@@ -197,8 +216,13 @@ class ArcfaceDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        imgName, instance_id = self.images[index]
+        imgName, instance_id, textName, flag = self.images[index]
         img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
+        if flag == 'image':
+            text = self.textDic_i[textName]
+        elif flag == 'video':
+            text = self.textDic_v[textName]
+        text = torch.Tensor(text).long()
 
         h, w, c = img.shape
 
@@ -218,7 +242,7 @@ class ArcfaceDataset(Dataset):
         img = self.transform(img)
         # r = torch.randn(3, self.size[0], self.size[1])
         # img = img + 0.1*r
-        return {'img':img, 'instance':instance, 'label':label}
+        return {'img':img, 'instance':instance, 'label':label, 'text': text}
 
 class TripletDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5):
@@ -237,6 +261,9 @@ class TripletDataset(Dataset):
             d_i = json.load(f)
         with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
             d_v = json.load(f)
+
+        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+            self.clsDic = json.load(f)
         
         with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
             instance2label = json.load(f)
@@ -244,53 +271,29 @@ class TripletDataset(Dataset):
         l_i = d_i['annotations']
         l_v = d_v['annotations']
 
-        images = []
-
-        instance = {}
-        s_i = set([])
-        s_v = set([])
-
-        self.clsDic = {}
+        self.images = []
 
         print('Loading data...')
         for d in l_i:
             for dd in d['annotations']:
-                if dd['instance_id'] > 0:
-                    s_i.add(dd['instance_id'])
-                    if dd['instance_id'] not in instance:
-                        instance[dd['instance_id']] = 1
-                    else:
-                        instance[dd['instance_id']] += 1
+                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(dd['instance_id'])
+                    t.append(self.clsDic[str(dd['instance_id'])])
                     t.append(instance2label[str(dd['instance_id'])])
-                    images.append(t)
+                    self.images.append(t)
 
         for d in l_v:
             for dd in d['annotations']:
-                if dd['instance_id'] > 0:
-                    s_v.add(dd['instance_id'])
-                    if dd['instance_id'] not in instance:
-                        instance[dd['instance_id']] = 1
-                    else:
-                        instance[dd['instance_id']] += 1
+                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
                     t = []
                     t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(dd['instance_id'])
+                    t.append(self.clsDic[str(dd['instance_id'])])
                     t.append(instance2label[str(dd['instance_id'])])
-                    images.append(t)
+                    self.images.append(t)
 
-        id_set = s_i & s_v
-        all_ids = set([])
-
-        self.images = []
-        for l in images:
-            if l[1] in id_set and instance[l[1]] > 10 and instance[l[1]] < 20:
-                self.images.append(l)
-                all_ids.add(l[-1])
-
-        # self.images = self.images[:10000]
+        self.num_classes = len(self.clsDic)
+        self.num_labels = len(set(instance2label.values()))
 
         self.cls_ins_dic = {}
         for i, l in enumerate(self.images):
@@ -327,6 +330,10 @@ class TripletDataset(Dataset):
         assert len(set([label_q, label_p, label_n])) == 1
         assert len(set([instance_id_q, instance_id_p])) == 1
 
+        instance_id_q = torch.tensor(instance_id_q)
+        instance_id_p = torch.tensor(instance_id_p)
+        instance_id_n = torch.tensor(instance_id_n)
+
         img_q = np.load(os.path.join(self.savePath, imgName_q)[:-4]+'.npy')
         img_p = np.load(os.path.join(self.savePath, imgName_p)[:-4]+'.npy')
         img_n = np.load(os.path.join(self.savePath, imgName_n)[:-4]+'.npy')
@@ -362,19 +369,24 @@ class TripletDataset(Dataset):
         img_p = self.transform(img_p)
         img_n = self.transform(img_n)
 
-        return {'img_q':img_q, 'img_p':img_p, 'img_n':img_n}
+        return {
+            'img_q':img_q, 
+            'img_p':img_p, 
+            'img_n':img_n, 
+            'img_q_instance':instance_id_q,
+            'img_p_instance':instance_id_p,
+            'img_n_instance':instance_id_n,
+        }
 
 
-class HTLDataset(Dataset):
-    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, m=3, t=3):
+class HardTripletDataset(Dataset):
+    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, n_samples=4):
         assert mode in ['train']
 
         self.root_dir = root_dir
         self.size = size
         self.flip_x = flip_x
-
-        self.m = m
-        self.t = t
+        self.n_samples = n_samples
 
         img_tat = mode + '_images'
         vdo_tat = mode + '_videos'
@@ -386,54 +398,80 @@ class HTLDataset(Dataset):
         with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
             d_v = json.load(f)
 
+        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+            self.clsDic = json.load(f)
+
         l_i = d_i['annotations']
         l_v = d_v['annotations']
 
-        self.images = []
-
-        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
-            self.clsDic = json.load(f)
+        self.samples = {}
 
         print('Loading data...')
         for d in l_i:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                    t = []
-                    t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(dd['instance_id'])
-                    self.images.append(t)
-
+                    instance = self.clsDic[str(dd['instance_id'])]
+                    if instance not in self.samples:
+                        self.samples[instance] = []
+                    self.samples[instance].append(
+                        os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
+                    
         for d in l_v:
             for dd in d['annotations']:
                 if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                    t = []
-                    t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
-                    t.append(dd['instance_id'])
-                    self.images.append(t)
+                    instance = self.clsDic[str(dd['instance_id'])]
+                    if instance not in self.samples:
+                        self.samples[instance] = []
+                    self.samples[instance].append(
+                        os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
 
         self.num_classes = len(self.clsDic)
+        
+        for k in self.samples.keys():
+            while len(self.samples[k]) < n_samples:
+                self.samples[k] *= 2
+            assert len(self.samples[k]) >= n_samples
 
-        self.instanceDic = {}
-        for i, path, instance_id in enumerate(self.images):
-            if instance_id not in self.instanceDic:
-                self.instanceDic[instance_id] = []
-            self.instanceDic[instance_id].append(i)
-
+        self.instances = list(self.samples.keys())
         print('Done')
-
         self.transform = transforms.Normalize(
             mean=[0.55574415, 0.51230767, 0.51123354], 
             std=[0.21303795, 0.21604613, 0.21273348])
     
     def __len__(self):
-        return len(self.images)
+        return len(self.instances)
     
-    def __getitem__(self, index, minDic):
-        imgName, instance_id = self.images[index]
-        min_instances = minDic[instance_id][:self.m-1]
-        
-        # anchors = 
-        img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
+    def __getitem__(self, index):
+        instance = self.instances[index]
+        imgPaths = random.sample(self.samples[instance], self.n_samples)
+        imgs = []
+        instances = []
+        for imgPath in imgPaths:
+            img = np.load(os.path.join(self.savePath, imgPath)[:-4]+'.npy')
+
+            h, w, c = img.shape
+
+            rh = random.randint(0, h-self.size[0])
+            rw = random.randint(0, w-self.size[1])
+
+            img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+            instance_t = torch.tensor(instance)
+
+            if np.random.rand() < self.flip_x:
+                img = img[:, ::-1, :].copy()
+            img = torch.from_numpy(img)
+            img = img.permute(2, 0, 1)
+            
+            img = self.transform(img)
+            
+            imgs.append(img)
+            instances.append(instance_t)
+        imgs = torch.stack(imgs, dim=0)
+        instances = torch.stack(instances, dim=0)
+
+        return {'img': imgs, 'instance': instances}
+
 
 '''
     for validation
@@ -547,7 +585,7 @@ class ValidationDataset(Dataset):
 '''
 
 class TestImageDataset(Dataset):
-    def __init__(self, root_dir='data', dir_list=['validation_dataset_part1', 'validation_dataset_part2'], transform=None):
+    def __init__(self, root_dir='data', dir_list=['validation_dataset_part1', 'validation_dataset_part2'], transform=None, maxLen=64, PAD=0):
         self.root_dir = root_dir
         self.transform = transform
         self.mode = 'image'
@@ -559,10 +597,11 @@ class TestImageDataset(Dataset):
         self.num_classes = len(self.labelDic['label2index'])
 
         dirs = [os.path.join(root_dir, d) for d in dir_list]
-
+        text2num = Text2Num(maxLen=maxLen, PAD=PAD)
         self.images = []
         self.ids = []
         self.frames = []
+        self.textDic = {}
         
         for di in dirs:
             img_dir_list = os.listdir(os.path.join(di, 'image'))
@@ -572,6 +611,11 @@ class TestImageDataset(Dataset):
                     self.images.append(os.path.join(di, 'image', img_dir, img_name))
                     self.frames.append(img_name.split('.')[0])
                     self.ids.append(img_dir)
+                textPath = os.path.join(di, 'image_text', img_dir+'.txt')
+                with open(textPath, 'r') as f:
+                    self.textDic[img_dir] = text2num(f.readline())
+        
+
         # self.images = self.images[:1000]
 
     def __len__(self):
@@ -582,8 +626,10 @@ class TestImageDataset(Dataset):
         img = cv2.imread(imgPath)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
-        
-        sample = {'img': img}
+        img_id = self.ids[index]
+        text = self.textDic[img_id]
+        text = torch.Tensor(text).long()
+        sample = {'img': img, 'text': text}
         if self.transform:
             sample = self.transform(sample)
         return sample
@@ -596,7 +642,7 @@ class TestImageDataset(Dataset):
 
 
 class TestVideoDataset(Dataset):
-    def __init__(self, root_dir='data', dir_list=['validation_dataset_part1', 'validation_dataset_part2'], transform=None, n=10):
+    def __init__(self, root_dir, transform=None, n=20, dir_list=['validation_dataset_part1', 'validation_dataset_part2'], maxLen=64, PAD=0):
         self.root_dir = root_dir
         self.transform = transform
         self.n = n
@@ -607,19 +653,23 @@ class TestVideoDataset(Dataset):
             self.labelDic = json.load(f)
 
         self.num_classes = len(self.labelDic['label2index'])
-
+        text2num = Text2Num(maxLen=maxLen, PAD=PAD)
         dirs = [os.path.join(root_dir, d) for d in dir_list]
 
         gap = 400 // n
         self.frames_ids = [i*gap for i in range(n)]
         self.videos = []
         self.ids = []
+        self.textDic = {}
         
         for di in dirs:
             vdo_names = os.listdir(os.path.join(di, 'video'))
             for vdo_name in vdo_names:
                 self.videos.append(os.path.join(di, 'video', vdo_name))
                 self.ids.append(vdo_name.split('.')[0])
+                textPath = os.path.join(di, 'video_text', vdo_name.split('.')[0]+'.txt')
+                with open(textPath, 'r') as f:
+                    self.textDic[vdo_name.split('.')[0]] = text2num(f.readline())
         # self.videos = self.videos[:100]
 
     def __len__(self):
@@ -633,11 +683,15 @@ class TestVideoDataset(Dataset):
         cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
         ret, img = cap.read()
         cap.release()
+
+        vdo_id = self.ids[v_index]
+        text = self.textDic[vdo_id]
+        text = torch.Tensor(text).long()
         
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
         
-        sample = {'img': img}
+        sample = {'img': img, 'text': text}
         if self.transform:
             sample = self.transform(sample)
         return sample
@@ -694,10 +748,22 @@ class TestDataset(Dataset):
             'classes': classes}
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    # from utils import collater_HardTriplet
+    # from torch.utils.data import DataLoader
+    # training_params = {"batch_size": 20,
+    #                     "shuffle": True,
+    #                     "drop_last": True,
+    #                     "collate_fn": collater_HardTriplet,
+    #                     "num_workers": 4}
+    
 #     from PIL import Image
-#     dataset = ArcfaceDataset()
-    # print(dataset[0])
+    dataset = ArcfaceDataset()
+    print(dataset[0])
+    # loader = DataLoader(dataset, **training_params)
+    # for data in loader:
+    #     print(data['img'].size())
+    #     break
     # print(len(dataset))
     # for d in tqdm(dataset):
     #     pass

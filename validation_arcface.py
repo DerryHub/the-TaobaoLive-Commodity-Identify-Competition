@@ -6,6 +6,7 @@ from arcface.resnet import ResNet
 from arcface.googlenet import GoogLeNet
 from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
+from arcface.densenet import DenseNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
@@ -108,6 +109,9 @@ def evaluate(opt):
     elif opt.network == 'inceptionresnetv2':
         model = InceptionResNetV2(opt)
         b_name = opt.network
+    elif opt.network == 'densenet':
+        model = DenseNet(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_d)
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 

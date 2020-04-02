@@ -7,6 +7,7 @@ from efficientdet.efficientnet import EfficientNet
 from efficientdet.utils import BBoxTransform, ClipBoxes, Anchors
 from efficientdet.loss import FocalLoss
 from efficientdet.config import EFFICIENTDET
+from bert.bert import BertModel
 # from config import EFFICIENTDET
 # from efficientnet import EfficientNet
 # from utils import BBoxTransform, ClipBoxes, Anchors
@@ -173,46 +174,47 @@ class Classifier(nn.Module):
                                           self.num_classes)
         return output.contiguous().view(output.shape[0], -1, self.num_classes)
 
-class SentVec(nn.Module):
+class SentVec_TFIDF(nn.Module):
     def __init__(self, embedding_size, root_dir='data'):
-        super(SentVec, self).__init__()
-        with open('TF_IDF.json', 'r') as f:
+        super(SentVec_TFIDF, self).__init__()
+        with open(os.path.join(root_dir, 'TF_IDF.json'), 'r') as f:
             TI_dic = json.load(f)
         max_size = len(TI_dic)
-        self.TI = torch.zeros(max_size).float().cuda()
+        self.TI = torch.zeros(max_size).float()
         for k in TI_dic.keys():
             self.TI[int(k)] = TI_dic[k]
         self.embedding = nn.Embedding(len(self.TI), embedding_size, padding_idx=0)
         
     def forward(self, words):
         embeddings = self.embedding(words)
-        weight = self.TI[words]
+        weight = self.TI[words].to(words.device)
         weight /= (weight.sum(dim=1).view(-1, 1)+1e-8)
         embeddings *= weight.view(-1, words.size(1), 1)
         sentEmbeddings = embeddings.sum(dim=1)
         return sentEmbeddings
-        
 
 class Instance(nn.Module):
-    def __init__(self, in_channels, num_anchors, num_layers, root_dir='data'):
+    def __init__(self, config, in_channels, num_anchors, num_layers, root_dir='data'):
         super(Instance, self).__init__()
         self.num_anchors = num_anchors
         layers = []
         for _ in range(num_layers):
-            layers.append(nn.Conv2d(in_channels*2, in_channels*2, kernel_size=3, stride=1, padding=1))
+            layers.append(nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1))
             layers.append(nn.ReLU(True))
         self.layers = nn.Sequential(*layers)
-        self.header = nn.Conv2d(in_channels*2, num_anchors, kernel_size=3, stride=1, padding=1)
+        self.header = nn.Conv2d(in_channels*2, num_anchors, kernel_size=1, stride=1)
         self.act = nn.Sigmoid()
-        self.sentvec = SentVec(embedding_size=in_channels, root_dir=root_dir)
+        # self.sentvec = SentVec_TFIDF(embedding_size=in_channels, root_dir=root_dir)
+        config.output_size = in_channels
+        self.sentvec = BertModel(config)
 
     def forward(self, inputs, text):
+        inputs = self.layers(inputs)
         b, c, w, h = inputs.size()
         sent = self.sentvec(text)
         sent = sent.repeat(1, w*h).view(b, w*h, sent.size(1))
         sent = sent.permute(0, 2, 1).view(b, sent.size(2), w, h)
         inputs = torch.cat([inputs, sent], dim=1)
-        inputs = self.layers(inputs)
         inputs = self.header(inputs)
         inputs = self.act(inputs)
         inputs = inputs.permute(0, 2, 3, 1)
@@ -223,11 +225,15 @@ class Instance(nn.Module):
 class EfficientDet(nn.Module):
     def __init__(self, config):
         super(EfficientDet, self).__init__()
+        if config.imgORvdo == 'image':
+            self.instance_threshold = config.instance_threshold_image
+        elif config.imgORvdo == 'video':
+            self.instance_threshold = config.instance_threshold_video
         self.is_training = config.is_training
         self.nms_threshold = config.nms_threshold
         self.cls_threshold = config.cls_threshold
-        self.instance_threshold = config.instance_threshold
         model_conf = EFFICIENTDET[config.network]
+        # self.model_conf = model_conf
         self.num_channels = model_conf['W_bifpn']
         input_channels = model_conf['EfficientNet_output']
 
@@ -245,7 +251,7 @@ class EfficientDet(nn.Module):
                                    num_layers=model_conf['D_class'])
         self.classifier = Classifier(in_channels=self.num_channels, num_anchors=self.anchors.num_anchors, num_classes=self.num_classes,
                                      num_layers=model_conf['D_class'])
-        self.instance = Instance(in_channels=self.num_channels, num_anchors=self.anchors.num_anchors, num_layers=model_conf['D_class'])
+        self.instance = Instance(config, in_channels=self.num_channels, num_anchors=self.anchors.num_anchors, num_layers=model_conf['D_class'])
         
         self.regressBoxes = BBoxTransform()
         self.clipBoxes = ClipBoxes()
@@ -361,7 +367,7 @@ if __name__ == '__main__':
         parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
         parser.add_argument("--saved_path", type=str, default="trained_models")
         parser.add_argument("--num_classes", type=int, default=23)
-        parser.add_argument('--network', default='efficientdet-d0', type=str,
+        parser.add_argument('--network', default='efficientdet-d3', type=str,
                             help='efficientdet-[d0, d1, ..]')
         parser.add_argument("--is_training", type=bool, default=True)
         parser.add_argument('--resume', type=bool, default=False)
@@ -370,17 +376,32 @@ if __name__ == '__main__':
         parser.add_argument("--cls_threshold", type=float, default=0.3)
         parser.add_argument('--cls_2_threshold', type=float, default=0.5)
         parser.add_argument('--iou_threshold', type=float, default=0.4)
-        parser.add_argument('--instance_threshold', type=float, default=0.3)
+        parser.add_argument('--instance_threshold_image', type=float, default=0.3)
+        parser.add_argument('--instance_threshold_video', type=float, default=0.3)
         parser.add_argument('--prediction_dir', type=str, default="predictions/")
         parser.add_argument("--workers", type=int, default=8)
+        parser.add_argument("--imgORvdo", type=str, default='video', help='[image, video]')
+
+        # bert config
+        parser.add_argument("--vocab_size", type=int, default=44126)
+        parser.add_argument("--hidden_size", type=int, default=256)
+        parser.add_argument("--num_hidden_layers", type=int, default=4)
+        parser.add_argument("--num_attention_heads", type=int, default=4)
+        parser.add_argument("--intermediate_size", type=int, default=512)
+        parser.add_argument("--hidden_act", type=str, default='gelu')
+        parser.add_argument("--hidden_dropout_prob", type=float, default=0.1)
+        parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1)
+        parser.add_argument("--max_position_embeddings", type=int, default=64)
+        parser.add_argument("--initializer_range", type=float, default=0.02)
+        parser.add_argument("--layer_norm_eps", type=int, default=1e-12)
         args = parser.parse_args()
         return args
     config = get_args_efficientdet()
 
     model = EfficientDet(config)
-    model.load_state_dict(torch.load('trained_models/efficientdet-d0.pth'))
-    # model.instance = Instance(in_channels=model.num_channels, num_anchors=model.anchors.num_anchors, num_layers=model.model_conf['D_class'])
-    # torch.save(model.state_dict(), 'trained_models/efficientdet-d0.pth')
+    model.load_state_dict(torch.load('trained_models/efficientdet-d3.pth'))
+    model.instance = Instance(config, in_channels=model.num_channels, num_anchors=model.anchors.num_anchors, num_layers=model.model_conf['D_class'])
+    torch.save(model.state_dict(), 'trained_models/efficientdet-d3_image.pth')
     # def count_parameters(model):
     #     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -392,6 +413,6 @@ if __name__ == '__main__':
     # model.eval()
     # b = torch.randn([3, 5, 6]).cuda()
     # # c3, c4, c5 = model(a)
-    # print(model(a))
-    # # print(print(len(model._blocks)))
+    # print(model([a, torch.zeros(3, 64).long().cuda()]))
+    # print(print(len(model._blocks)))
     # print(c3.size(), c4.size(), c5.size())

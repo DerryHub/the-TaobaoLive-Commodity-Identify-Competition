@@ -16,7 +16,7 @@ def get_args_efficientdet():
     parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_3w", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=None)
-    parser.add_argument('--network', default='efficientdet-d0', type=str,
+    parser.add_argument('--network', default='efficientdet-d3', type=str,
                         help='efficientdet-[d0, d1, ..]')
     parser.add_argument("--is_training", type=bool, default=True)
     parser.add_argument('--resume', type=bool, default=True)
@@ -25,9 +25,27 @@ def get_args_efficientdet():
     parser.add_argument("--cls_threshold", type=float, default=0.3)
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
-    parser.add_argument('--instance_threshold', type=float, default=0.3)
+    parser.add_argument('--instance_threshold_image', type=float, default=0.35)
+    parser.add_argument('--instance_threshold_video', type=float, default=0.35)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
     parser.add_argument("--workers", type=int, default=8)
+
+    parser.add_argument("--imgORvdo", type=str, default=None, help='[image, video]')
+
+    # BERT config
+    parser.add_argument("--vocab_size", type=int, default=None)
+    parser.add_argument("--hidden_size", type=int, default=256)
+    parser.add_argument("--num_hidden_layers", type=int, default=4)
+    parser.add_argument("--num_attention_heads", type=int, default=4)
+    parser.add_argument("--intermediate_size", type=int, default=512)
+    parser.add_argument("--hidden_act", type=str, default='gelu')
+    parser.add_argument("--hidden_dropout_prob", type=float, default=0.1)
+    parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1)
+    parser.add_argument("--max_position_embeddings", type=int, default=64)
+    parser.add_argument("--initializer_range", type=float, default=0.02)
+    parser.add_argument("--layer_norm_eps", type=int, default=1e-12)
+    parser.add_argument("--output_size", type=int, default=None)
+    parser.add_argument("--PAD", type=int, default=0)
     args = parser.parse_args()
     return args
 

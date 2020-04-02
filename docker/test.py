@@ -124,7 +124,7 @@ def joint_bayesian(opt, vdo_features, img_features, vdo_IDs, img_IDs, k):
 
     vdo2img = []
     length = vdo_features.shape[0]
-    for index in tqdm(range(1+length//1000)):
+    for index in tqdm(range(1+(length-1)//1000)):
         if index < length//1000:
             scores = verify(A, G, vdo_features[1000*index:1000*(index+1)], img_features)
         else:
@@ -148,10 +148,13 @@ def test(opt_a, opt_e):
     dataset_vdo = TestVideoDataset(
         root_dir=opt_e.data_path,
         transform=transforms.Compose([Normalizer_Test(), Resizer_Test()]))
-
+        
     opt_e.num_classes = dataset_img.num_classes
+    opt_e.vocab_size = dataset_img.vocab_size
     
+    opt_e.imgORvdo = 'image'
     efficientdet_image = EfficientDet(opt_e)
+    opt_e.imgORvdo = 'video'
     efficientdet_video = EfficientDet(opt_e)
     
     efficientdet_image.load_state_dict(torch.load(os.path.join(opt_e.saved_path, opt_e.network+'_image'+'.pth')))
@@ -189,7 +192,7 @@ def test(opt_a, opt_e):
     print('predicting boxs...')
     imgs = pre_efficient(dataset_img, efficientdet_image, opt_e, cls_k, ins_f=True)
     vdos = pre_efficient(dataset_vdo, efficientdet_video, opt_e, cls_k, ins_f=True)
-    
+
     dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
     dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
 
@@ -274,7 +277,7 @@ def test(opt_a, opt_e):
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
             
-            simis_is = np.argsort(-simis)[:3]
+            simis_is = np.argsort(-np.array(simis))[:3]
             for simis_i in simis_is:
                 if simis[simis_i] < 0.2:
                     break

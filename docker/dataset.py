@@ -19,6 +19,7 @@ class Text2Num:
             self.vocab = json.load(f)
         self.PAD = PAD
         self.maxLen = maxLen
+        self.vocab_size = len(self.vocab)
 
     def __call__(self, text):
         words = jieba.cut(text, cut_all=False, HMM=True)
@@ -52,6 +53,7 @@ class TestImageDataset(Dataset):
         self.num_classes = len(self.labelDic['label2index'])
 
         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
         self.images = []
         self.ids = []
         self.frames = []
@@ -95,7 +97,7 @@ class TestImageDataset(Dataset):
 
 
 class TestVideoDataset(Dataset):
-    def __init__(self, root_dir, transform=None, n=10, maxLen=64, PAD=0):
+    def __init__(self, root_dir, transform=None, n=20, maxLen=64, PAD=0):
         self.root_dir = root_dir
         self.transform = transform
         self.n = n
@@ -107,9 +109,9 @@ class TestVideoDataset(Dataset):
 
         self.num_classes = len(self.labelDic['label2index'])
         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
-
-        gap = 400 // n
-        self.frames_ids = [i*gap for i in range(n)]
+        self.vocab_size = text2num.vocab_size   
+        # gap = 400 // n
+        # self.frames_ids = [i*gap for i in range(n)]
         self.videos = []
         self.ids = []
         self.textDic = {}
@@ -128,9 +130,11 @@ class TestVideoDataset(Dataset):
 
     def __getitem__(self, index):
         v_index = index // self.n
-        f_index = self.frames_ids[index % self.n]
+        # f_index = self.frames_ids[index % self.n]
         vdo_name = self.videos[v_index]
         cap = cv2.VideoCapture(vdo_name)
+        frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        f_index = int((frames // self.n) * (index % self.n))
         cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
         ret, img = cap.read()
         cap.release()
@@ -149,8 +153,12 @@ class TestVideoDataset(Dataset):
 
     def getImageInfo(self, index):
         v_index = index // self.n
-        frame = self.frames_ids[index % self.n]
+        # frame = self.frames_ids[index % self.n]
         vdoPath = self.videos[v_index]
+        cap = cv2.VideoCapture(vdoPath)
+        frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        frame = int((frames // self.n) * (index % self.n))
+        cap.release()
         vdo_id = self.ids[v_index]
         return vdoPath, vdo_id, str(frame)
 

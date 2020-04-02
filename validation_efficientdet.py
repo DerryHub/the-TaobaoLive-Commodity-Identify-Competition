@@ -23,6 +23,7 @@ def test(opt):
     opt.resume = True
     test_set = EfficientdetDataset(opt.data_path, mode='validation', transform=transforms.Compose([Normalizer(), Resizer()]), imgORvdo=opt.imgORvdo)
     opt.num_classes = test_set.num_classes
+    opt.vocab_size = test_set.vocab_size
     opt.batch_size *= 2
     test_params = {"batch_size": opt.batch_size,
                    "shuffle": False,
@@ -37,9 +38,10 @@ def test(opt):
     model.set_is_training(False)
     model.eval()
 
-    if os.path.isdir(opt.prediction_dir):
-        shutil.rmtree(opt.prediction_dir)
-    os.makedirs(opt.prediction_dir)
+    if writePIC:
+        if os.path.isdir(opt.prediction_dir):
+            shutil.rmtree(opt.prediction_dir)
+        os.makedirs(opt.prediction_dir)
     
     progress_bar = tqdm(test_generator)
     progress_bar.set_description_str(' Evaluating')
@@ -128,7 +130,7 @@ def test(opt):
                     if pred_prob < opt.cls_threshold:
                         break
                     # pred_label = int(top5_label[box_id][0])
-                    pred_label = instances[box_id, 0]
+                    pred_label = int(instances[box_id, 0])
                     xmin, ymin, xmax, ymax = boxes[box_id, :]
                     color = colors[pred_label]
                     cv2.rectangle(output_image, (xmin, ymin), (xmax, ymax), color, 2)
