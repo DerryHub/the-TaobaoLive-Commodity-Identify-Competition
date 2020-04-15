@@ -3,7 +3,7 @@ import argparse
 def get_args_efficientdet():
     parser = argparse.ArgumentParser("EfficientDet")
     parser.add_argument("--image_size", type=int, default=512, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=128, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=256, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
@@ -16,7 +16,7 @@ def get_args_efficientdet():
     parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_3w", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=None)
-    parser.add_argument('--network', default='efficientdet-d3', type=str,
+    parser.add_argument('--network', default='efficientdet-d0', type=str,
                         help='efficientdet-[d0, d1, ..]')
     parser.add_argument("--is_training", type=bool, default=True)
     parser.add_argument('--resume', type=bool, default=True)
@@ -25,8 +25,8 @@ def get_args_efficientdet():
     parser.add_argument("--cls_threshold", type=float, default=0.3)
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
-    parser.add_argument('--instance_threshold_image', type=float, default=0.35)
-    parser.add_argument('--instance_threshold_video', type=float, default=0.35)
+    parser.add_argument('--instance_threshold_image', type=float, default=0.3)
+    parser.add_argument('--instance_threshold_video', type=float, default=0.3)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
     parser.add_argument("--workers", type=int, default=8)
 
@@ -52,7 +52,7 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=112, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=256, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=512, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_3w", help="the root folder of dataset")
@@ -67,17 +67,26 @@ def get_args_arcface():
     parser.add_argument("--m", type=float, default=0.5)
     
     parser.add_argument("--network", type=str, default='resnet', 
-                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2]")
+                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2, resnet_cbam]")
+
+    parser.add_argument("--validation_config", type=list,
+                        default=[('resnet', 112, 50, 0.8), ('resnet_cbam', 224, 50, 0.7), ('resnet_cbam', 224, 100, 1.0)])
 
     # resnet config
-    parser.add_argument("--num_layers", type=int, default=50, help="[50, 100, 152]")
+    parser.add_argument("--num_layers_r", type=int, default=50, help="[50, 100, 152]")
     parser.add_argument("--mode", type=str, default='ir_se', help="[ir, ir_se]")
+
+    # resnet cbam config
+    parser.add_argument("--num_layers_c", type=int, default=100, help="[50, 100, 152]")
 
     # googlenet config
 
     # inceptionv4 config
 
     # inceptionresnetv2 config
+
+    # densenet config
+    parser.add_argument("--num_layers_d", type=int, default=121, help="[121, 161, 169, 201]")
 
     args = parser.parse_args()
     return args

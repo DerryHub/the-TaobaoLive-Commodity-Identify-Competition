@@ -177,7 +177,7 @@ class Classifier(nn.Module):
 class SentVec_TFIDF(nn.Module):
     def __init__(self, embedding_size, root_dir='data'):
         super(SentVec_TFIDF, self).__init__()
-        with open('TF_IDF.json', 'r') as f:
+        with open(os.path.join(root_dir, 'TF_IDF.json'), 'r') as f:
             TI_dic = json.load(f)
         max_size = len(TI_dic)
         self.TI = torch.zeros(max_size).float()
@@ -291,7 +291,7 @@ class EfficientDet(nn.Module):
 
     def forward(self, inputs):
         if self.is_training:
-            img_batch, annotations, text = inputs
+            img_batch, annotations = inputs
         else:
             img_batch, text = inputs
 

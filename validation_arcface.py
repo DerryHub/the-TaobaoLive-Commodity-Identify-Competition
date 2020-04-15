@@ -7,6 +7,7 @@ from arcface.googlenet import GoogLeNet
 from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
+from arcface.resnet_cbam import ResNetCBAM
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
@@ -51,16 +52,19 @@ def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
 def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
     print('Calculating cosine similarity...')
     cos = cosine_similarity(vdo_features, img_features)
-    argmax = np.argsort(-cos, axis=1)
+    # argmax = np.argsort(-cos, axis=1)
     acc = 0
     rates_t = []
     rates_f = []
     length = len(instances) // 2
+    cos = np.max((cos[:length, :length], cos[length:, length:], cos[length:, :length], cos[:length, length:]), axis=0)
+    argmax = np.argsort(-cos, axis=1)
     for i in tqdm(range(len(cos))):
         for j in argmax[i]:
             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
                 continue
-            if j%length == i%length:
+            # if j%length == i%length:
+            if i==j:
                 acc +=1
                 rates_t.append(cos[i, j])
             else:
@@ -94,8 +98,7 @@ def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
 
 def evaluate(opt):
     dataset = ValidationArcfaceDataset(root_dir='data/validation_instance/', size=(opt.size, opt.size))
-    opt.batch_size *= 4
-    loader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
+    loader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=4)
 
     if opt.network == 'resnet':
         model = ResNet(opt)
@@ -112,6 +115,9 @@ def evaluate(opt):
     elif opt.network == 'densenet':
         model = DenseNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
+    elif opt.network == 'resnet_cbam':
+        model = ResNetCBAM(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_c)
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
@@ -125,32 +131,74 @@ def evaluate(opt):
 
     print('Predecting...')
     for d in tqdm(loader):
-        img = d['img']
-        vdo = d['vdo']
+        img = d['img'].cuda()
+        vdo = d['vdo'].cuda()
         instances += d['instance']
-        img = img.cuda()
-        vdo = vdo.cuda()
+        img_text = d['img_text'].cuda()
+        vdo_text = d['vdo_text'].cuda()
+        img_e = d['img_e'].cuda()
+        vdo_e = d['vdo_e'].cuda()
         with torch.no_grad():
-            img_f = model(img).cpu().numpy()
-            vdo_f = model(vdo).cpu().numpy()
+            img_f = model(img)
+            vdo_f = model(vdo)
+
+        img_f = img_f.cpu().numpy()
+        vdo_f = vdo_f.cpu().numpy()
 
         img_features = np.append(img_features, img_f, axis=0)
         vdo_features = np.append(vdo_features, vdo_f, axis=0)
 
-    with open('data/instance2label.json', 'r') as f:
-        ins2labDic = json.load(f)
+    # with open('data/instance2label.json', 'r') as f:
+    #     ins2labDic = json.load(f)
 
-    rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
-    # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)
-    # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
-    print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
-    print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
-    print(acc)
+    print('Calculating cosine similarity...')
+    cos = cosine_similarity(vdo_features, img_features)
+    return cos, instances
+
+    # rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
+    # # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)
+    # # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
+    # print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
+    # print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
+    # print(acc)
 
 if __name__ == "__main__":
-    import torchvision.transforms as transforms
     opt = get_args_arcface()
-    evaluate(opt)
+    opt.batch_size *= 4
+    config_list = opt.validation_config
+    cos = 0
+    for network, size, num_layers, r in config_list:
+        opt.network = network
+        opt.size = size
+        opt.num_layers_c = num_layers
+        opt.num_layers_r = num_layers
+        cos_, instances = evaluate(opt)
+        cos += cos_ * r
+    with open('data/instance2label.json', 'r') as f:
+        ins2labDic = json.load(f)
+    acc = 0
+    rates_t = []
+    rates_f = []
+    length = len(instances) // 2
+    # cos_1 = np.min((cos[:length, :length], cos[length:, length:], cos[length:, :length], cos[:length, length:]), axis=0)
+    cos = np.max((cos[:length, :length], cos[length:, length:], cos[length:, :length], cos[:length, length:]), axis=0)
+    # cos = cos_1 + cos_2
+    argmax = np.argsort(-cos, axis=1)
+    for i in tqdm(range(len(cos))):
+        for j in argmax[i]:
+            if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
+                continue
+            # if j%length == i%length:
+            if i==j:
+                acc +=1
+                rates_t.append(cos[i, j])
+            else:
+                rates_f.append(cos[i, j])
+            break
+
+    print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
+    print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
+    print(acc/len(cos))
     # # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
     # training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
     # opt.num_classes = training_set.num_classes

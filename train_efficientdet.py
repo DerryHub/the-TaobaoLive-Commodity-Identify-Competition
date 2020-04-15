@@ -73,14 +73,19 @@ def train(opt):
         print('Epoch: {}/{}:'.format(epoch + 1, opt.num_epochs))
         model.train()
         epoch_loss = []
+        acc = []
         progress_bar = tqdm(training_generator)
         for iter, data in enumerate(progress_bar):
             optimizer.zero_grad()
             ins_loss, cls_loss, reg_loss = model([
-                data['img'].cuda().float(), 
+                data['img'].cuda().float(),
+                data['text'].cuda(),
                 data['annot'].cuda(), 
-                data['text'].cuda()
             ])
+            # cls_loss, reg_loss = model([
+            #     data['img'].cuda().float(), 
+            #     data['annot'].cuda()
+            # ])
 
             ins_loss = ins_loss.mean()
             cls_loss = cls_loss.mean()
@@ -89,15 +94,18 @@ def train(opt):
             if loss == 0:
                 continue
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
             optimizer.step()
             epoch_loss.append(float(loss))
             total_loss = np.mean(epoch_loss)
+            # acc.append(float(acc_))
+            # total_acc = np.mean(acc)
 
             progress_bar.set_description('Epoch: {}/{}. Iteration: {}/{}'.format(epoch + 1, opt.num_epochs, iter + 1, num_iter_per_epoch))
-            
             progress_bar.write('Ins loss: {:.5f}\tCls loss: {:.5f}\tReg loss: {:.5f}\tBatch loss: {:.5f}\tTotal loss: {:.5f}'.format(
                     ins_loss, cls_loss, reg_loss, loss, total_loss))
+#             progress_bar.write('Ins loss: {:.5f}\tCls loss: {:.5f}\tReg loss: {:.5f}\tBatch loss: {:.5f}\tTotal loss: {:.5f}\n\
+# Batch acc: {:.5f}\tTotal acc: {:.5f}'.format(
+#                     ins_loss, cls_loss, reg_loss, loss, total_loss, acc_, total_acc))
 
         scheduler.step(np.mean(epoch_loss))
 

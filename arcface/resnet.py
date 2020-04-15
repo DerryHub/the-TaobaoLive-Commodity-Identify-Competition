@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from collections import namedtuple
-from utils import l2_norm, Flatten
+from arcface.utils import l2_norm, Flatten, SentVec_TFIDF, IorV
 from bert.bert import BertModel
 
 
@@ -102,7 +102,10 @@ class ResNet(nn.Module):
         drop_ratio = config.drop_ratio
         mode = config.mode
         embedding_size = config.embedding_size
-        self.sentvec = BertModel(config)
+        config.output_size = embedding_size
+        # self.sentvec = BertModel(config)
+        # self.sentvec = SentVec_TFIDF(embedding_size=embedding_size, root_dir='data/')
+        # self.IorV = IorV(embedding_size=embedding_size)
 
         assert num_layers in [50, 100, 152], 'num_layers should be 50,100, or 152'
         assert mode in ['ir', 'ir_se'], 'mode should be ir or ir_se'
@@ -111,7 +114,7 @@ class ResNet(nn.Module):
             unit_module = bottleneck_IR
         elif mode == 'ir_se':
             unit_module = bottleneck_IR_SE
-        self.input_layer = nn.Sequential(nn.Conv2d(3, 64, (3, 3), 1, 1 ,bias=False), 
+        self.input_layer = nn.Sequential(nn.Conv2d(3, 64, (3,3), 1, 1, bias=False), 
                                       nn.BatchNorm2d(64), 
                                       nn.PReLU(64))
         self.output_layer = nn.Sequential(nn.BatchNorm2d(512), 
@@ -120,10 +123,15 @@ class ResNet(nn.Module):
                                        nn.Linear(512 * 7 * 7, embedding_size),
                                        nn.BatchNorm1d(embedding_size))
         
-        self.last_layer = nn.Sequential(
-            nn.Linear(2*embedding_size, embedding_size),
-            nn.BatchNorm1d(embedding_size)
-        )
+        # self.last_layer = nn.Sequential(
+        #     nn.Linear(2*embedding_size, embedding_size),
+        #     nn.BatchNorm1d(embedding_size)
+        # )
+
+        # self.iORv_info = nn.Sequential(
+        #     nn.Linear(2*embedding_size, embedding_size),
+        #     nn.BatchNorm1d(embedding_size)
+        # )
 
         modules = []
         for block in blocks:
@@ -150,13 +158,16 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, text):
+    def forward(self, x):
         x = self.input_layer(x)
         x = self.body(x)
         x = self.output_layer(x)
-        sent = self.sentvec(text)
-        x = torch.cat((x, sent), dim=1)
-        x = self.last_layer(x)
+        # sent = self.sentvec(text)
+        # x = torch.cat((x, sent), dim=1)
+        # x = self.last_layer(x)
+        # iORv = self.IorV(iORv)
+        # x = torch.cat((x, iORv), dim=1)
+        # x = self.iORv_info(x)
         return l2_norm(x)
 
 
@@ -202,7 +213,7 @@ if __name__ == "__main__":
         parser.add_argument("--num_layers_d", type=int, default=121, help="[121, 161, 169, 201]")
 
         # BERT config
-        parser.add_argument("--vocab_size", type=int, default=100)
+        parser.add_argument("--vocab_size", type=int, default=44126)
         parser.add_argument("--hidden_size", type=int, default=256)
         parser.add_argument("--num_hidden_layers", type=int, default=4)
         parser.add_argument("--num_attention_heads", type=int, default=4)
@@ -221,6 +232,14 @@ if __name__ == "__main__":
     config = get_args_arcface()
     a = torch.randn([2,3,112,112])
     b = torch.Tensor([[0]*64]*2).long()
+    c = torch.tensor([0,1])
     net = ResNet(config)
-    x = net(a,b)
+    net.load_state_dict(torch.load('trained_models/resnet_ir_se_50.pth'))
+    net.sentvec = BertModel(config)
+    net.last_layer = nn.Sequential(
+            nn.Linear(2*512, 512),
+            nn.BatchNorm1d(512)
+        )
+    torch.save(net.state_dict(), 'trained_models/resnet_ir_se_50.pth')
+    x = net(a,b,c)
     print(x.size())

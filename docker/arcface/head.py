@@ -59,14 +59,9 @@ class LinearLayer(nn.Module):
     def __init__(self, config):
         super(LinearLayer, self).__init__()
         embedding_size = config.embedding_size
-        num_classes = config.num_classes
-        self.fc = nn.Sequential(
-            nn.Linear(embedding_size, 4096),
-            nn.BatchNorm1d(4096),
-            nn.ReLU(inplace=True),
-            nn.Linear(4096, num_classes)
-        )
+        num_labels = config.num_labels
+        self.fc = nn.Linear(embedding_size, num_labels)
     
-    def forward(self, embbedings, label):
+    def forward(self, embbedings):
         output = self.fc(embbedings)
         return output

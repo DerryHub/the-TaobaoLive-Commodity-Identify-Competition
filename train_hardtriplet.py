@@ -10,6 +10,7 @@ from arcface.googlenet import GoogLeNet
 from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
+from arcface.resnet_cbam import ResNetCBAM
 from arcface.head import Arcface, LinearLayer
 from dataset import HardTripletDataset
 from config import get_args_arcface
@@ -59,6 +60,10 @@ def train(opt):
     elif opt.network == 'densenet':
         backbone = DenseNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
+        h_name = 'arcface_'+b_name
+    elif opt.network == 'resnet_cbam':
+        backbone = ResNetCBAM(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_c)
         h_name = 'arcface_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))

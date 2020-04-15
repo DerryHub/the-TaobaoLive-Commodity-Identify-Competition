@@ -9,6 +9,7 @@ from arcface.googlenet import GoogLeNet
 from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
+from arcface.resnet_cbam import ResNetCBAM
 from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset
 from config import get_args_arcface
@@ -38,6 +39,8 @@ def train(opt):
 
     opt.num_classes = training_set.num_classes
     opt.num_labels = training_set.num_labels
+    opt.vocab_size = training_set.vocab_size
+    print(opt.num_classes, opt.vocab_size)
 
     if opt.network == 'resnet':
         backbone = ResNet(opt)
@@ -59,6 +62,10 @@ def train(opt):
         backbone = DenseNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
         h_name = 'arcface_'+b_name
+    elif opt.network == 'resnet_cbam':
+        backbone = ResNetCBAM(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_c)
+        h_name = 'arcface_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
@@ -70,9 +77,10 @@ def train(opt):
     print('head: {}'.format(h_name))
 
     if opt.resume:
-        print('Loading model...')
+        print('Loading Backbone Model...')
         backbone.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
         if os.path.isfile(os.path.join(opt.saved_path, h_name+'.pth')):
+            print('Loading Head Model...')
             head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
         # if os.path.isfile(os.path.join(opt.saved_path, l_name+'.pth')):
         #     linear.load_state_dict(torch.load(os.path.join(opt.saved_path, l_name+'.pth')))
@@ -123,6 +131,8 @@ def train(opt):
 
             img = data['img'].cuda()
             instance = data['instance'].cuda()
+            text = data['text'].cuda()
+            iORv = data['iORv'].cuda()
             # label = data['label'].cuda()
 
             embedding = backbone(img)
@@ -161,4 +171,6 @@ def train(opt):
 if __name__ == "__main__":
     opt = get_args_arcface()
     train(opt)
+
+
 

@@ -90,7 +90,7 @@ class EfficientdetDataset(Dataset):
                 t.append(tats[i])
                 self.images.append(t)
         # print(len(self.images))
-        # self.images = self.images[:1000]
+        self.images = self.images[:1000]
         print('Done')
 
     def __len__(self):
@@ -101,7 +101,7 @@ class EfficientdetDataset(Dataset):
         text_name = imgName.split('_')[0]
         text = self.textDic[t][text_name]
         text = torch.Tensor(text).long()
-    
+
         img = cv2.imread(os.path.join(self.root_dir, imgPath))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
@@ -117,7 +117,7 @@ class EfficientdetDataset(Dataset):
                 annotation[0, 5] = 0
             annotations[i:i+1, :] = annotation
             # annotations = np.append(annotations, annotation, axis=0)
-        
+            
         sample = {'img': img, 'annot': annotations, 'text': text}
         if self.transform:
             sample = self.transform(sample)
@@ -220,16 +220,26 @@ class ArcfaceDataset(Dataset):
         img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
         if flag == 'image':
             text = self.textDic_i[textName]
+            iORv = 0
         elif flag == 'video':
             text = self.textDic_v[textName]
-        text = torch.Tensor(text).long()
-
+            iORv = 1
+        text = torch.tensor(text).long()
+        iORv = torch.tensor(iORv).long()
+        # if self.size[0] != 224:
+        #     r = 224 // self.size[0]
+        #     img = cv2.resize(img, (256//r,256//r))
         h, w, c = img.shape
+        
+        rh_1 = random.randint(0, h-224)
+        rh_2 = random.randint(224, h)
+        rw_1 = random.randint(0, w-224)
+        rw_2 = random.randint(224, w)
 
-        rh = random.randint(0, h-self.size[0])
-        rw = random.randint(0, w-self.size[1])
-
-        img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+        # img = img[rh:224+rh, rw:224+rw, :]
+        img = img[rh_1:rh_2, rw_1:rw_2, :]
+        # print(img.shape)
+        img = cv2.resize(img, self.size)
 
         instance = torch.tensor(self.clsDic[str(instance_id)])
         label = torch.tensor(self.instance2label[str(instance_id)])
@@ -242,7 +252,7 @@ class ArcfaceDataset(Dataset):
         img = self.transform(img)
         # r = torch.randn(3, self.size[0], self.size[1])
         # img = img + 0.1*r
-        return {'img':img, 'instance':instance, 'label':label, 'text': text}
+        return {'img':img, 'instance':instance, 'label':label, 'text': text, 'iORv': iORv}
 
 class TripletDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5):
@@ -448,7 +458,9 @@ class HardTripletDataset(Dataset):
         instances = []
         for imgPath in imgPaths:
             img = np.load(os.path.join(self.savePath, imgPath)[:-4]+'.npy')
-
+            if self.size[0] != 224:
+                r = 224 // self.size[0]
+                img = cv2.resize(img, (256//r,256//r))
             h, w, c = img.shape
 
             rh = random.randint(0, h-self.size[0])
@@ -478,9 +490,24 @@ class HardTripletDataset(Dataset):
 '''
 
 class ValidationArcfaceDataset(Dataset):
-    def __init__(self, size=(112, 112), root_dir='data/validation_instance/'):
+    def __init__(self, size=(112, 112), root_dir='data/validation_instance/', maxLen=64, PAD=0):
         self.root_dir = root_dir
         self.size = size
+        text2num = Text2Num(maxLen=maxLen, root_dir='data', PAD=PAD)
+        self.vocab_size = text2num.vocab_size
+
+        img_tat = 'validation_images'
+        vdo_tat = 'validation_videos'
+
+        with open(os.path.join('data', img_tat+'_text.json'), 'r') as f:
+            self.textDic_i = json.load(f)
+        with open(os.path.join('data', vdo_tat+'_text.json'), 'r') as f:
+            self.textDic_v = json.load(f)
+        
+        for k in self.textDic_i.keys():
+            self.textDic_i[k] = text2num(self.textDic_i[k])
+        for k in self.textDic_v.keys():
+            self.textDic_v[k] = text2num(self.textDic_v[k])
         instances = os.listdir(root_dir)
         self.items = []
         print('Loading Data...')
@@ -492,14 +519,18 @@ class ValidationArcfaceDataset(Dataset):
             for img in imgs:
                 if 'images' in img:
                     l.append(os.path.join(instance, img))
+                    text_name = img.split(instance)[-1].split('_')[0]
+                    l.append(text_name)
                     break
             if len(l) == 0:
                 continue
             for img in imgs:
                 if 'videos' in img:
                     l.append(os.path.join(instance, img))
+                    text_name = img.split(instance)[-1].split('_')[0]
+                    l.append(text_name)
                     break
-            if len(l) < 2:
+            if len(l) < 4:
                 continue
             l.append(instance)
             self.items.append(l)
@@ -513,10 +544,28 @@ class ValidationArcfaceDataset(Dataset):
         return len(self.items) * 2
 
     def __getitem__(self, index):
-        imgPath, vdoPath, instance = self.items[index%self.length]
-        img = np.load(os.path.join(self.root_dir, imgPath))
-        vdo = np.load(os.path.join(self.root_dir, vdoPath))
+        imgPath, textName_img, vdoPath, textName_vdo, instance = self.items[index%self.length]
+        img_text = self.textDic_i[textName_img]
+        vdo_text = self.textDic_v[textName_vdo]
+        img_text = torch.Tensor(img_text).long()
+        vdo_text = torch.Tensor(vdo_text).long()
+        # img = np.load(os.path.join(self.root_dir, imgPath))
+        # vdo = np.load(os.path.join(self.root_dir, vdoPath))
+        img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        vdo = cv2.imread(os.path.join(self.root_dir, vdoPath))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
+        vdo = cv2.cvtColor(vdo, cv2.COLOR_BGR2RGB)
+        vdo = vdo.astype(np.float32) / 255
         
+        hi, wi, ci = img.shape
+        hv, wv, cv = vdo.shape
+
+        if self.size[0] != 224:
+            r = 224 / self.size[0]
+            img = cv2.resize(img, (int(hi/r), int(wi/r)))
+            vdo = cv2.resize(vdo, (int(hv/r), int(wv/r)))
+
         hi, wi, ci = img.shape
         hv, wv, cv = vdo.shape
 
@@ -540,7 +589,15 @@ class ValidationArcfaceDataset(Dataset):
         img = self.transform(img)
         vdo = self.transform(vdo)
 
-        return {'img': img, 'vdo': vdo, 'instance':instance}
+        return {
+            'img': img, 
+            'vdo': vdo, 
+            'img_text': img_text, 
+            'vdo_text': vdo_text, 
+            'instance':instance, 
+            'img_e': torch.tensor(0), 
+            'vdo_e': torch.tensor(1)
+        }
 
 
 class ValidationDataset(Dataset):
@@ -598,6 +655,7 @@ class TestImageDataset(Dataset):
 
         dirs = [os.path.join(root_dir, d) for d in dir_list]
         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
         self.images = []
         self.ids = []
         self.frames = []
@@ -614,9 +672,8 @@ class TestImageDataset(Dataset):
                 textPath = os.path.join(di, 'image_text', img_dir+'.txt')
                 with open(textPath, 'r') as f:
                     self.textDic[img_dir] = text2num(f.readline())
-        
-
-        # self.images = self.images[:1000]
+    
+        # self.images = self.images[:100]
 
     def __len__(self):
         return len(self.images)
@@ -641,6 +698,61 @@ class TestImageDataset(Dataset):
         return imgPath, img_id, frame
 
 
+# class TestVideoDataset(Dataset):
+#     def __init__(self, root_dir, transform=None, n=20, maxLen=64, PAD=0):
+#         self.root_dir = root_dir
+#         self.transform = transform
+#         self.n = n
+#         self.mode = 'video'
+
+#         label_file = 'label.json'
+#         with open(label_file, 'r') as f:
+#             self.labelDic = json.load(f)
+
+#         self.num_classes = len(self.labelDic['label2index'])
+#         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
+#         self.vocab_size = text2num.vocab_size   
+#         # gap = 400 // n
+#         # self.frames_ids = [i*gap for i in range(n)]
+#         self.videos = []
+#         self.ids = []
+#         self.textDic = {}
+        
+#         vdo_names = os.listdir(os.path.join(root_dir, 'video'))
+#         for vdo_name in vdo_names:
+#             self.videos.append(os.path.join(root_dir, 'video', vdo_name))
+#             self.ids.append(vdo_name.split('.')[0])
+#             textPath = os.path.join(root_dir, 'video_text', vdo_name.split('.')[0]+'.txt')
+#             with open(textPath, 'r') as f:
+#                 self.textDic[vdo_name.split('.')[0]] = text2num(f.readline())
+#         # self.videos = self.videos[:100]
+
+#     def __len__(self):
+#         return len(self.videos)*self.n
+
+#     def __getitem__(self, index):
+#         v_index = index // self.n
+#         # f_index = self.frames_ids[index % self.n]
+#         vdo_name = self.videos[v_index]
+#         cap = cv2.VideoCapture(vdo_name)
+#         frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+#         f_index = int((frames // self.n) * (index % self.n))
+#         cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
+#         ret, img = cap.read()
+#         cap.release()
+
+#         vdo_id = self.ids[v_index]
+#         text = self.textDic[vdo_id]
+#         text = torch.tensor(text).long()
+        
+#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#         img = img.astype(np.float32) / 255
+        
+#         sample = {'img': img, 'text': text}
+#         if self.transform:
+#             sample = self.transform(sample)
+#         return sample
+
 class TestVideoDataset(Dataset):
     def __init__(self, root_dir, transform=None, n=20, dir_list=['validation_dataset_part1', 'validation_dataset_part2'], maxLen=64, PAD=0):
         self.root_dir = root_dir
@@ -654,10 +766,11 @@ class TestVideoDataset(Dataset):
 
         self.num_classes = len(self.labelDic['label2index'])
         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
         dirs = [os.path.join(root_dir, d) for d in dir_list]
 
-        gap = 400 // n
-        self.frames_ids = [i*gap for i in range(n)]
+        # gap = 400 // n
+        # self.frames_ids = [i*gap for i in range(n)]
         self.videos = []
         self.ids = []
         self.textDic = {}
@@ -670,16 +783,19 @@ class TestVideoDataset(Dataset):
                 textPath = os.path.join(di, 'video_text', vdo_name.split('.')[0]+'.txt')
                 with open(textPath, 'r') as f:
                     self.textDic[vdo_name.split('.')[0]] = text2num(f.readline())
-        # self.videos = self.videos[:100]
+                    
+        # self.videos = self.videos[:10]
 
     def __len__(self):
         return len(self.videos)*self.n
 
     def __getitem__(self, index):
         v_index = index // self.n
-        f_index = self.frames_ids[index % self.n]
+        # f_index = self.frames_ids[index % self.n]
         vdo_name = self.videos[v_index]
         cap = cv2.VideoCapture(vdo_name)
+        frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        f_index = int((frames // self.n) * (index % self.n))
         cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
         ret, img = cap.read()
         cap.release()
@@ -698,8 +814,12 @@ class TestVideoDataset(Dataset):
 
     def getImageInfo(self, index):
         v_index = index // self.n
-        frame = self.frames_ids[index % self.n]
+        # frame = self.frames_ids[index % self.n]
         vdoPath = self.videos[v_index]
+        cap = cv2.VideoCapture(vdoPath)
+        frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        frame = int((frames // self.n) * (index % self.n))
+        cap.release()
         vdo_id = self.ids[v_index]
         return vdoPath, vdo_id, str(frame)
 
@@ -720,7 +840,7 @@ class TestDataset(Dataset):
         return len(self.items) * 2
 
     def __getitem__(self, index):
-        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index%self.length]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes, text = self.items[index%self.length]
         if self.mode == 'image':
             img = cv2.imread(imgPath)
         else:
@@ -745,7 +865,8 @@ class TestDataset(Dataset):
             'imgID': imgID, 
             'frame': frame, 
             'box': np.array([xmin, ymin, xmax, ymax]),
-            'classes': classes}
+            'classes': classes,
+            'text': text}
 
 
 if __name__ == "__main__":

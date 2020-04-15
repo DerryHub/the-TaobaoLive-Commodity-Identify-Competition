@@ -83,7 +83,7 @@ class TestImageDataset(Dataset):
         img = img.astype(np.float32) / 255
         img_id = self.ids[index]
         text = self.textDic[img_id]
-        text = torch.Tensor(text).long()
+        text = torch.tensor(text).long()
         sample = {'img': img, 'text': text}
         if self.transform:
             sample = self.transform(sample)
@@ -141,7 +141,7 @@ class TestVideoDataset(Dataset):
 
         vdo_id = self.ids[v_index]
         text = self.textDic[vdo_id]
-        text = torch.Tensor(text).long()
+        text = torch.tensor(text).long()
         
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
@@ -179,7 +179,7 @@ class TestDataset(Dataset):
         return len(self.items) * 2
 
     def __getitem__(self, index):
-        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes = self.items[index%self.length]
+        frame, imgID, imgPath, xmin, ymin, xmax, ymax, classes, text = self.items[index%self.length]
         if self.mode == 'image':
             img = cv2.imread(imgPath)
         else:
@@ -204,4 +204,5 @@ class TestDataset(Dataset):
             'imgID': imgID, 
             'frame': frame, 
             'box': np.array([xmin, ymin, xmax, ymax]),
-            'classes': classes}
+            'classes': classes,
+            'text': text}

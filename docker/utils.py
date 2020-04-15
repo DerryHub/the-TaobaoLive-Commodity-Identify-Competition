@@ -7,6 +7,12 @@ import cv2
     for test
 '''
 
+def area(boxs):
+    h = boxs[:, 3] - boxs[:, 1]
+    w = boxs[:, 2] - boxs[:, 0]
+    area = w * h
+    return area
+
 class Normalizer_Test(object):
 
     def __init__(self):
