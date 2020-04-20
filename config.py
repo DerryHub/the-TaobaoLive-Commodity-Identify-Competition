@@ -30,7 +30,7 @@ def get_args_efficientdet():
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--GPUs", type=list, default=[0])
 
-    parser.add_argument("--imgORvdo", type=str, default='image', help='[image, video]')
+    parser.add_argument("--imgORvdo", type=str, default='video', help='[image, video]')
 
     # BERT config
     parser.add_argument("--vocab_size", type=int, default=None)
@@ -53,7 +53,7 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=224, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=40, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=256, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
@@ -66,24 +66,25 @@ def get_args_arcface():
     parser.add_argument("--workers", type=int, default=24)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.1)
+    parser.add_argument("--m", type=float, default=0.5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument('--threshold', type=float, default=0.6)
     parser.add_argument("--GPUs", type=list, default=[0])
     parser.add_argument("--n_samples", type=int, default=4)
+    parser.add_argument("--network_text", type=str, default='tf_idf', help="[bert, tf_idf]")
     parser.add_argument("--network", type=str, default='resnet_cbam', 
-                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2, densenet, resnet_cbam]")
+                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2, densenet, resnet_cbam, efficientnet-b[0~8]]")
     
     parser.add_argument("--validation_config", type=list,
-                        default=[('resnet', 112, 50, 1)])
+                        default=[('resnet_cbam', 224, 152, 1)])
 
     # resnet config
     parser.add_argument("--num_layers_r", type=int, default=50, help="[50, 100, 152]")
     parser.add_argument("--mode", type=str, default='ir_se', help="[ir, ir_se]")
 
     # resnet cbam config
-    parser.add_argument("--num_layers_c", type=int, default=50, help="[50, 100, 152]")
+    parser.add_argument("--num_layers_c", type=int, default=50, help="[50, 101, 152]")
 
     # googlenet config
 
@@ -95,11 +96,11 @@ def get_args_arcface():
     parser.add_argument("--num_layers_d", type=int, default=121, help="[121, 161, 169, 201]")
 
     # BERT config
-    parser.add_argument("--vocab_size", type=int, default=44126)
-    parser.add_argument("--hidden_size", type=int, default=256)
-    parser.add_argument("--num_hidden_layers", type=int, default=4)
-    parser.add_argument("--num_attention_heads", type=int, default=4)
-    parser.add_argument("--intermediate_size", type=int, default=512)
+    parser.add_argument("--vocab_size", type=int, default=44127)
+    parser.add_argument("--hidden_size", type=int, default=768)
+    parser.add_argument("--num_hidden_layers", type=int, default=12)
+    parser.add_argument("--num_attention_heads", type=int, default=12)
+    parser.add_argument("--intermediate_size", type=int, default=3072)
     parser.add_argument("--hidden_act", type=str, default='gelu')
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.1)
     parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1)

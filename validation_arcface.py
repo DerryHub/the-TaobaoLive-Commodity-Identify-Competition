@@ -8,6 +8,7 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
+from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
@@ -118,6 +119,10 @@ def evaluate(opt):
     elif opt.network == 'resnet_cbam':
         model = ResNetCBAM(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_c)
+    elif 'efficientnet' in opt.network:
+        model = EfficientNet(opt)
+        b_name = opt.network
+        h_name = 'arcface_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
@@ -164,7 +169,7 @@ def evaluate(opt):
 
 if __name__ == "__main__":
     opt = get_args_arcface()
-    opt.batch_size *= 4
+    opt.batch_size *= 1
     config_list = opt.validation_config
     cos = 0
     for network, size, num_layers, r in config_list:

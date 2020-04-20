@@ -22,6 +22,10 @@ colors = [(39, 129, 113), (164, 80, 133), (83, 122, 114), (99, 81, 172), (95, 56
           (81, 175, 64), (178, 19, 157), (74, 188, 190), (18, 114, 2), (62, 128, 96), (21, 3, 150), (0, 6, 95),
           (2, 20, 184), (122, 37, 185)]
 
+class MSE_match:
+    def __call__(self, f1, f2):
+        return torch.mean(torch.sum((f1-f2)**2, dim=1))
+
 def collater(data):
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
@@ -431,7 +435,11 @@ class AdamW(Optimizer):
         return loss
 
 if __name__ == "__main__":
-    a = [[1,3,4,5]]*10+[[1,3,6,7]]
-    a = np.array(a)
-    print(area(a))
-    print(a[np.argsort(-area(a))])
+    # a = [[1,3,4,5]]*10+[[1,3,6,7]]
+    # a = np.array(a)
+    # print(area(a))
+    # print(a[np.argsort(-area(a))])
+    cost = MSE_match()
+    a = torch.tensor([[1,2.],[4,5]])
+    b = torch.tensor([[2,2.],[4,5]])
+    print(cost(a,b))

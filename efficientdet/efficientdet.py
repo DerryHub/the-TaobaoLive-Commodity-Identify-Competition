@@ -476,10 +476,15 @@ class EfficientNet(nn.Module):
 class EfficientDet(nn.Module):
     def __init__(self, config, **kwargs):
         super(EfficientDet, self).__init__()
+        if config.imgORvdo == 'image':
+            self.instance_threshold = config.instance_threshold_image
+        elif config.imgORvdo == 'video':
+            self.instance_threshold = config.instance_threshold_video
         self.compound_coef = compound_coef = int(config.network[-1])
         self.nms_threshold = config.nms_threshold
         self.cls_threshold = config.cls_threshold
         self.num_classes = config.num_classes
+
 
         load_weights = False
         self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6]
@@ -560,16 +565,19 @@ class EfficientDet(nn.Module):
             scores = torch.max(classification, dim=2, keepdim=True)[0]
             scores_over_thresh = (scores > self.cls_threshold)[:, :, 0]
 
+            instance[instance[:]>self.instance_threshold] = 1.0
+            instance[instance[:]<=self.instance_threshold] = 0.0
+
             output_list = []
             batch_size = scores.size(0)
             for i in range(batch_size):
 
                 if scores_over_thresh[i, :].sum() == 0:
-                    # output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 1), torch.zeros(0, 23), torch.zeros(0, 4)])
-                    output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 23), torch.zeros(0, 4)])
+                    output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 1), torch.zeros(0, 23), torch.zeros(0, 4)])
+                    # output_list.append([torch.zeros(0), torch.zeros(0), torch.zeros(0, 23), torch.zeros(0, 4)])
                     continue
                 
-                # instance_i = instance[:, scores_over_thresh[i], :]
+                instance_i = instance[:, scores_over_thresh[i], :]
                 classification_i = classification[:, scores_over_thresh[i], :]
                 transformed_anchors_i = transformed_anchors[:, scores_over_thresh[i], :]
                 scores_i = scores[:, scores_over_thresh[i], :]
@@ -577,8 +585,8 @@ class EfficientDet(nn.Module):
                 anchors_nms_idx = nms(torch.cat([transformed_anchors_i, scores_i], dim=2)[i, :, :], self.nms_threshold)
                 
                 nms_scores, nms_class = classification_i[i, anchors_nms_idx, :].max(dim=1)
-                # output_list.append([nms_scores, nms_class, instance_i[i, anchors_nms_idx, :], classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
-                output_list.append([nms_scores, nms_class, classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
+                output_list.append([nms_scores, nms_class, instance_i[i, anchors_nms_idx, :], classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
+                # output_list.append([nms_scores, nms_class, classification_i[i, anchors_nms_idx, :], transformed_anchors_i[i, anchors_nms_idx, :]])
                 # print(classification_i[i, anchors_nms_idx, :].size(), nms_class.size())
             return output_list
 

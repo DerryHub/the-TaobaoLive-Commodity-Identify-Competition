@@ -57,7 +57,7 @@ def pre_efficient(dataset, model, opt_e, cls_k, ins_f=True, calAREA=None):
                 items.append(l)
     return items
 
-def pre_bockbone(dataset, model, opt_a):
+def pre_bockbone(dataset, models, opt_a):
     params = {"batch_size": opt_a.batch_size,
                 "shuffle": False,
                 "drop_last": False,
@@ -66,12 +66,12 @@ def pre_bockbone(dataset, model, opt_a):
     generator = DataLoader(dataset, **params)
 
     length = len(dataset)
-    features_arr = np.zeros((length, opt_a.embedding_size))
+    features_arr = [np.zeros((length, opt_a.embedding_size)) for i in range(len(models))]
     boxes_arr = np.zeros((length, 4))
     IDs = []
     frames = []
     classes = []
-
+    
     progress_bar = tqdm(generator)
     for i, data in enumerate(progress_bar):
         img = data['img'].cuda()
@@ -83,14 +83,13 @@ def pre_bockbone(dataset, model, opt_a):
         cs = torch.cat(cs, dim=1).tolist()
 
         with torch.no_grad():
-            features = model(img).cpu().numpy()
+            for index, model in enumerate(models):
+                features = model(img).cpu().numpy()
+                features_arr[index][i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = features
         classes += cs
         IDs += imgID
         frames += frame
-        features_arr[i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = features
         boxes_arr[i*opt_a.batch_size:min((i+1)*opt_a.batch_size, length), :] = box
-        # features_arr = np.append(features_arr, features, axis=0)
-        # boxes_arr = np.append(boxes_arr, box, axis=0)
 
     return features_arr, boxes_arr, IDs, frames, classes
 
@@ -165,12 +164,10 @@ def createVdo2Img(imgs, vdos, k, opt_a):
     vdo2img = []
     config_list = opt_a.validation_config
 
-    img_features_list = []
-    vdo_features_list = []
     rates = []
-    for network, size, num_layers, r in config_list:
+    backbones = []
+    for network, num_layers, r in config_list:
         opt_a.network = network
-        opt_a.size = size
         opt_a.num_layers_c = num_layers
         opt_a.num_layers_r = num_layers
         rates.append(r)
@@ -200,35 +197,34 @@ def createVdo2Img(imgs, vdos, k, opt_a):
         backbone.cuda()
         backbone.eval()
 
-        dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
-        dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
+        backbones.append(backbone)
 
-        print('creating features...')
-        img_features, img_boxes, img_IDs, img_frames, img_classes = pre_bockbone(dataset_det_img, backbone, opt_a)
-        vdo_features, vdo_boxes, vdo_IDs, vdo_frames, vdo_classes = pre_bockbone(dataset_det_vdo, backbone, opt_a)
+    dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
+    dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
 
-        img_features_list.append(img_features)
-        vdo_features_list.append(vdo_features)
+    print('creating features...')
+    img_features_list, img_boxes, img_IDs, img_frames, img_classes = pre_bockbone(dataset_det_img, backbones, opt_a)
+    vdo_features_list, vdo_boxes, vdo_IDs, vdo_frames, vdo_classes = pre_bockbone(dataset_det_vdo, backbones, opt_a)
 
-        assert len(set([
-            len(img_features), 
-            len(img_boxes), 
-            len(img_IDs), 
-            len(img_frames), 
-            len(img_classes)]))==1
-        assert len(set([
-            len(vdo_features), 
-            len(vdo_boxes), 
-            len(vdo_IDs), 
-            len(vdo_frames), 
-            len(vdo_classes)]))==1
+    assert len(set([
+        len(img_features_list[0]), 
+        len(img_boxes), 
+        len(img_IDs), 
+        len(img_frames), 
+        len(img_classes)]))==1
+    assert len(set([
+        len(vdo_features_list[0]), 
+        len(vdo_boxes), 
+        len(vdo_IDs), 
+        len(vdo_frames), 
+        len(vdo_classes)]))==1
 
-        # cos_ = cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k)
+    # cos_ = cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k)
 
-        # cos += cos_
+    # cos += cos_
     
-    length_v = vdo_features.shape[0] // 2
-    length_i = img_features.shape[0] // 2
+    length_v = vdo_features_list[0].shape[0] // 2
+    length_i = img_features_list[0].shape[0] // 2
     # cos = np.zeros((length_v, length_i))
     print('calculating cosine similarity...')
     for index in tqdm(range(1+(length_v-1)//1000)):
@@ -246,10 +242,6 @@ def createVdo2Img(imgs, vdos, k, opt_a):
         # cos_min = np.min((cos_1[:, :length_i], cos_1[:, length_i:], cos_2[:, :length_i], cos_2[:, length_i:]), axis=0)
         # cos = cos_max + cos_min
 
-    # length_v = vdo_features.shape[0] // 2
-    # length_i = img_features.shape[0] // 2
-    # cos = np.max((cos[:length_v, :length_i], cos[length_v:, length_i:], cos[length_v:, :length_i], cos[:length_v, length_i:]), axis=0)
-
         argmax = np.argpartition(cos, kth=-k, axis=1)[:, -k:]
         
         for i in range(argmax.shape[0]):
@@ -257,7 +249,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
                 if cos[i, am] > 0:
                     vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], cos[i, am], i+1000*index, am])
 
-    return vdo2img, img_features_list[:length_i], vdo_features_list[:length_v], img_boxes[:length_i], vdo_boxes[:length_v], img_IDs[:length_i], vdo_IDs[:length_v], img_frames[:length_i], vdo_frames[:length_v], img_classes[:length_i], vdo_classes[:length_v]
+    return vdo2img, img_features_list, vdo_features_list, img_boxes[:length_i], vdo_boxes[:length_v], img_IDs[:length_i], vdo_IDs[:length_v], img_frames[:length_i], vdo_frames[:length_v], img_classes[:length_i], vdo_classes[:length_v]
 
 def test(opt_a, opt_e):
     k = 2
@@ -294,6 +286,8 @@ def test(opt_a, opt_e):
     print('predicting boxs...')
     imgs = pre_efficient(dataset_img, efficientdet_image, opt_e, cls_k, ins_f=True)
     vdos = pre_efficient(dataset_vdo, efficientdet_video, opt_e, cls_k, ins_f=True)
+
+    torch.cuda.empty_cache()
 
     vdo2img, img_features_list, vdo_features_list, img_boxes, vdo_boxes, img_IDs, vdo_IDs, img_frames, vdo_frames, img_classes, vdo_classes = createVdo2Img(imgs, vdos, k, opt_a)
 
