@@ -13,6 +13,7 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
+from arcface.resnest import ResNeSt
 from config import get_args_efficientdet, get_args_arcface
 from joint_bayesian.JointBayesian import verify
 from tqdm import tqdm
@@ -47,7 +48,7 @@ def pre_efficient(dataset, model, opt_e, cls_k, ins_f=True, calAREA=None):
                 areas = area(boxes.cpu().numpy())
                 area_arg = np.argsort(-areas)[:calAREA]
             for box_id in area_arg:
-                if instances[box_id, 0] == 0 and ins_f:
+                if instances[box_id, 0] == 0 and ins_f and len(area_arg) > 1:
                     continue
                 pred_prob = float(scores[box_id])
                 if pred_prob < opt_e.cls_threshold:
@@ -170,6 +171,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
         opt_a.network = network
         opt_a.num_layers_c = num_layers
         opt_a.num_layers_r = num_layers
+        opt_a.num_layers_s = num_layers
         rates.append(r)
 
         if opt_a.network == 'resnet':
@@ -190,6 +192,9 @@ def createVdo2Img(imgs, vdos, k, opt_a):
         elif opt_a.network == 'resnet_cbam':
             backbone = ResNetCBAM(opt_a)
             b_name = opt_a.network+'_{}'.format(opt_a.num_layers_c)
+        elif opt_a.network == 'resnest':
+            backbone = ResNeSt(opt_a)
+            b_name = opt_a.network+'_{}'.format(opt_a.num_layers_s)
         else:
             raise RuntimeError('Cannot Find the Model: {}'.format(opt_a.network))
 
@@ -290,6 +295,9 @@ def test(opt_a, opt_e):
     torch.cuda.empty_cache()
 
     vdo2img, img_features_list, vdo_features_list, img_boxes, vdo_boxes, img_IDs, vdo_IDs, img_frames, vdo_frames, img_classes, vdo_classes = createVdo2Img(imgs, vdos, k, opt_a)
+    
+    length_i = len(img_boxes)
+    length_v = len(vdo_boxes)
 
     # if opt_a.network == 'resnet':
     #     backbone = ResNet(opt_a)
@@ -394,9 +402,15 @@ def test(opt_a, opt_e):
             vdo_f = np.zeros((0, opt_a.embedding_size))
             for index in vdo_index:
                 vdo_f = np.append(vdo_f, vdo_features_list[i][index].reshape(1, opt_a.embedding_size), axis=0)
+            # for index in vdo_index:  
+            #     vdo_f = np.append(vdo_f, vdo_features_list[i][index+length_v].reshape(1, opt_a.embedding_size), axis=0)
             img_f = np.zeros((0, opt_a.embedding_size))
             for index in img_index:
                 img_f = np.append(img_f, img_features_list[i][index].reshape(1, opt_a.embedding_size), axis=0)
+            # for index in img_index:
+            #     img_f = np.append(img_f, img_features_list[i][index+length_i].reshape(1, opt_a.embedding_size), axis=0)
+            # cos_ = cosine_similarity(vdo_f, img_f)
+            # cos += np.max((cos_[:len(vdo_index), :len(img_index)], cos_[:len(vdo_index), len(img_index):], cos_[len(vdo_index):, :len(img_index)], cos_[len(vdo_index):, len(img_index):]), axis=0)
             cos += cosine_similarity(vdo_f, img_f)
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]

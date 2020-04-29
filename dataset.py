@@ -62,13 +62,13 @@ class ITMatchTrain(Dataset):
         self.instances = torch.zeros((len(arcfaceDataset))).long()
         print('Calculating features...')
         for i, d in enumerate(tqdm(arcfaceLoader)):
-            img = d['img'].cuda()
+            # img = d['img'].cuda()
             text = d['text']
             instance = d['instance']
-            with torch.no_grad():
-                feature = model(img).cpu()
+            # with torch.no_grad():
+            #     feature = model(img).cpu()
             
-            self.features[i*batch_size:(i+1)*batch_size] = feature
+            # self.features[i*batch_size:(i+1)*batch_size] = feature
             self.texts[i*batch_size:(i+1)*batch_size] = text
             self.instances[i*batch_size:(i+1)*batch_size] = instance
         
@@ -77,10 +77,11 @@ class ITMatchTrain(Dataset):
 
     def __getitem__(self, index):
         text = self.texts[index]
-        feature = self.features[index]
+        # feature = self.features[index]
+        feature = None
         instance = self.instances[index]
-        return {'feature': feature, 'text':text, 'instance':instance}
-        # return {'text':text, 'instance':instance}
+        # return {'feature': feature, 'text':text, 'instance':instance}
+        return {'text':text, 'instance':instance}
 
 class ITMatchValidation(Dataset):
     def __init__(self, size=(224, 224), root_dir='data/validation_instance/', maxLen=64, PAD=0, imgORvdo='video'):
@@ -92,6 +93,7 @@ class ITMatchValidation(Dataset):
         assert imgORvdo in ['image', 'video']
 
         tat = 'validation_'+imgORvdo+'s'
+        # tat = 'train_'+imgORvdo+'s'
 
         with open(os.path.join('data', tat+'_text.json'), 'r') as f:
             textDic = json.load(f)
@@ -384,12 +386,7 @@ class ArcfaceDataset(Dataset):
         imgName, instance_id, textName, iORv = self.images[index]
         img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
         text = self.textDic[iORv][textName]
-        # if flag == 'image':
-        #     text = self.textDic_i[textName]
-        #     iORv = 0
-        # elif flag == 'video':
-        #     text = self.textDic_v[textName]
-        #     iORv = 1
+        
         text = torch.tensor(text).long()
         iORv = torch.tensor(iORv).long()
         
@@ -415,6 +412,133 @@ class ArcfaceDataset(Dataset):
         img = self.transform(img)
         
         return {'img':img, 'instance':instance, 'label':label, 'text': text, 'iORv': iORv}
+        # return {'instance':instance, 'label':label, 'text': text, 'iORv': iORv}
+
+
+
+class ArcfaceDatasetSeparate(Dataset):
+    def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, maxLen=64, PAD=0, imgORvdo='all'):
+        assert mode in ['train']
+        assert imgORvdo in ['all']
+
+        self.root_dir = root_dir
+        self.size = size
+        self.flip_x = flip_x
+
+        if imgORvdo == 'all':
+            tats = [mode + '_images', mode + '_videos']
+        elif imgORvdo == 'image':
+            tats = [mode + '_images']
+        elif imgORvdo == 'video':
+            tats = [mode + '_videos']
+
+        savePath = mode + '_instance'
+        self.savePath = os.path.join(root_dir, savePath)
+
+        text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
+
+        d = []
+        self.textDic = []
+        for tat in tats:
+            with open(os.path.join(root_dir, tat+'_annotation.json'), 'r') as f:
+                d.append(json.load(f))
+            with open(os.path.join(root_dir, tat+'_text.json'), 'r') as f:
+                self.textDic.append(json.load(f))
+                
+        for i in range(len(self.textDic)):
+            for k in self.textDic[i].keys():
+                self.textDic[i][k] = text2num(self.textDic[i][k])
+                
+        l = [dd['annotations'] for dd in d]
+
+        self.images = []
+
+        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+            self.clsDic = json.load(f)
+        with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
+            self.instance2label = json.load(f)
+        names = ['image', 'video']
+        print('Loading data...')
+        for i, ll in enumerate(l):
+            for d in ll:
+                for dd in d['annotations']:
+                    if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                        t = []
+                        t.append(os.path.join(str(dd['instance_id']), tats[i]+str(dd['instance_id'])+d['img_name']))
+                        t.append(dd['instance_id'])
+                        t.append(d['img_name'].split('_')[0])
+                        t.append(names[i])
+                        self.images.append(t)
+
+        self.num_classes = len(self.clsDic)
+        self.num_labels = len(set(self.instance2label.values()))
+
+        self.dic = {}
+        for i in range(len(self.images)):
+            imgName, instance_id, textName, iORv = self.images[i]
+            if instance_id not in self.dic:
+                self.dic[instance_id] = {}
+                self.dic[instance_id]['image'] = []
+                self.dic[instance_id]['video'] = []
+            self.dic[instance_id][iORv].append(i)
+        
+        for k in self.dic.keys():
+            if len(self.dic[k]['image']) == 0 or len(self.dic[k]['video']) == 0:
+                del self.dic[k]
+
+        self.dic = list(self.dic.items())
+
+        # self.images = self.images[:2222]
+        print('Done')
+
+        self.transform = transforms.Normalize(
+            mean=[0.55574415, 0.51230767, 0.51123354], 
+            std=[0.21303795, 0.21604613, 0.21273348])
+
+    def __len__(self):
+        return len(self.dic)
+
+    def __getitem__(self, index):
+        imgIndex = random.choice(self.dic[index][1]['image'])
+        vdoIndex = random.choice(self.dic[index][1]['video'])
+        
+        sample = []
+        instances = []
+        for index in [imgIndex, vdoIndex]:
+            imgName, instance_id, textName, iORv = self.images[index]
+            img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
+            # text = self.textDic[iORv][textName]
+            
+            # text = torch.tensor(text).long()
+            # iORv = torch.tensor(iORv).long()
+            
+            h, w, c = img.shape
+            
+            rh_1 = random.randint(0, h-224)
+            rh_2 = random.randint(224, h)
+            rw_1 = random.randint(0, w-224)
+            rw_2 = random.randint(224, w)
+
+            img = img[rh_1:rh_2, rw_1:rw_2, :]
+            
+            img = cv2.resize(img, self.size)
+
+            instances.append(torch.tensor(self.clsDic[str(instance_id)]))
+            # label = torch.tensor(self.instance2label[str(instance_id)])
+
+            if np.random.rand() < self.flip_x:
+                img = img[:, ::-1, :].copy()
+            img = torch.from_numpy(img)
+            img = img.permute(2, 0, 1)
+            
+            img = self.transform(img)
+            sample.append(img)
+
+        assert instances[0] == instances[1]
+
+        return {'img': sample[0], 'vdo':sample[1], 'instance':instances[0]}
+
 
 class TripletDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5):

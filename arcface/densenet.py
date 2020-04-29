@@ -5,7 +5,8 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as cp
 from collections import OrderedDict
 from torch import Tensor
-from arcface.utils import l2_norm, Flatten
+from torch.jit.annotations import List
+from arcface.utils import l2_norm
 
 model_urls = {
     'densenet121': 'https://download.pytorch.org/models/densenet121-a639ec97.pth',
@@ -45,7 +46,7 @@ class _DenseLayer(nn.Module):
                 return True
         return False
 
-    @torch.jit.unused  # noqa: T484
+    # @torch.jit.unused  # noqa: T484
     def call_checkpoint_bottleneck(self, input):
         # type: (List[Tensor]) -> Tensor
         def closure(*inputs):
@@ -53,15 +54,15 @@ class _DenseLayer(nn.Module):
 
         return cp.checkpoint(closure, input)
 
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, input):
-        # type: (List[Tensor]) -> (Tensor)
-        pass
+    # @torch.jit._overload_method  # noqa: F811
+    # def forward(self, input):
+    #     # type: (List[Tensor]) -> (Tensor)
+    #     pass
 
-    @torch.jit._overload_method  # noqa: F811
-    def forward(self, input):
-        # type: (Tensor) -> (Tensor)
-        pass
+    # @torch.jit._overload_method  # noqa: F811
+    # def forward(self, input):
+    #     # type: (Tensor) -> (Tensor)
+    #     pass
 
     # torchscript does not yet support *args, so we overload method
     # allowing it to take either a List[Tensor] or single Tensor
@@ -118,52 +119,62 @@ class _Transition(nn.Sequential):
                                           kernel_size=1, stride=1, bias=False))
         self.add_module('pool', nn.AvgPool2d(kernel_size=2, stride=2))
 
-
-def get_args(num_layers):
-    if num_layers == 121:
-        return {
-            'growth_rate': 32,
-            'block_config': (6, 12, 24, 16),
-            'num_init_features': 64
-        }
-    elif num_layers == 161:
-        return {
-            'growth_rate': 48,
-            'block_config': (6, 12, 36, 24),
-            'num_init_features': 96
-        }
-    elif num_layers == 169:
-        return {
-            'growth_rate': 32,
-            'block_config': (6, 12, 32, 32),
-            'num_init_features': 64
-        }
-    elif num_layers == 201:
-        return {
-            'growth_rate': 32,
-            'block_config': (6, 12, 48, 32),
-            'num_init_features': 64
-        }
+MODEL = {
+    121:{
+        'growth_rate': 32,
+        'block_config': (6, 12, 24, 16),
+        'num_init_features': 64
+    },
+    161:{
+        'growth_rate': 48,
+        'block_config': (6, 12, 36, 24),
+        'num_init_features': 96
+    },
+    169:{
+        'growth_rate': 32,
+        'block_config': (6, 12, 32, 32),
+        'num_init_features': 64
+    },
+    169:{
+        'growth_rate': 32,
+        'block_config': (6, 12, 48, 32),
+        'num_init_features': 64
+    }
+}
 
 class DenseNet(nn.Module):
+    r"""Densenet-BC model class, based on
+    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`_
+    Args:
+        growth_rate (int) - how many filters to add each layer (`k` in paper)
+        block_config (list of 4 ints) - how many layers in each pooling block
+        num_init_features (int) - the number of filters to learn in the first convolution layer
+        bn_size (int) - multiplicative factor for number of bottle neck layers
+          (i.e. bn_size * k features in the bottleneck layer)
+        drop_rate (float) - dropout rate after each dense layer
+        num_classes (int) - number of classification classes
+        memory_efficient (bool) - If True, uses checkpointing. Much more memory efficient,
+          but slower. Default: *False*. See `"paper" <https://arxiv.org/pdf/1707.06990.pdf>`_
+    """
+
     def __init__(self, config):
-
         super(DenseNet, self).__init__()
+        embedding_size = config.embedding_size
+        drop_ratio = config.drop_ratio
+        model_dic = MODEL[config.num_layers_d]
+        growth_rate = model_dic['growth_rate']
+        block_config = model_dic['block_config']
+        num_init_features = model_dic['num_init_features']
 
-        # arg_dic = get_args(config.num_layers_d)
-        # growth_rate = arg_dic['growth_rate']
-        # block_config = arg_dic['block_config']
-        # num_init_features = arg_dic['num_init_features']
-        # embedding_size = config.embedding_size
-
-        growth_rate = 32
-        block_config = (6, 12, 24, 16)
-        num_init_features = 64
-        embedding_size = 512
+        # growth_rate = 32
+        # block_config = (6, 12, 24, 16)
+        # num_init_features = 64
+        # embedding_size = 2048
+        # drop_ratio = 0.1
 
         bn_size = 4
         drop_rate = 0
-
+        memory_efficient = False
 
         # First convolution
         self.features = nn.Sequential(OrderedDict([
@@ -183,7 +194,7 @@ class DenseNet(nn.Module):
                 bn_size=bn_size,
                 growth_rate=growth_rate,
                 drop_rate=drop_rate,
-                memory_efficient=False
+                memory_efficient=memory_efficient
             )
             self.features.add_module('denseblock%d' % (i + 1), block)
             num_features = num_features + num_layers * growth_rate
@@ -195,38 +206,53 @@ class DenseNet(nn.Module):
 
         # Final batch norm
         self.features.add_module('norm5', nn.BatchNorm2d(num_features))
-        
+
         # Linear layer
         # self.classifier = nn.Linear(num_features, 1000)
-        self.output_layer = nn.Sequential(nn.BatchNorm2d(1024),
-                                       nn.AdaptiveAvgPool2d((2, 2)),
-                                       Flatten(),
-                                       nn.Linear(4096, embedding_size),
-                                       nn.BatchNorm1d(embedding_size))
-
+        self.output_layer = nn.Sequential(
+                                    nn.BatchNorm1d(num_features * 4),
+                                    nn.Dropout(drop_ratio),
+                                    nn.Linear(num_features * 4, embedding_size),
+                                    nn.BatchNorm1d(embedding_size))
 
         # Official init from torch repo.
-        # for m in self.modules():
-        #     if isinstance(m, nn.Conv2d):
-        #         nn.init.kaiming_normal_(m.weight)
-        #     elif isinstance(m, nn.BatchNorm2d):
-        #         nn.init.constant_(m.weight, 1)
-        #         nn.init.constant_(m.bias, 0)
-        #     elif isinstance(m, nn.Linear):
-        #         nn.init.constant_(m.bias, 0)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         features = self.features(x)
-        out = self.output_layer(features)
+        out = F.relu(features, inplace=True)
+        out = F.adaptive_avg_pool2d(out, (2, 2))
+        out = torch.flatten(out, 1)
+        out = self.output_layer(out)
         return l2_norm(out)
 
 
-
-
 if __name__ == "__main__":
-    net = DenseNet('aaa')
-    # state_dict = torch.load('arcface/densenet_121.pth')
+    net = DenseNet('aa')
+    # state_dict = torch.load('trained_models/densenet121-a639ec97.pth')
+    # pattern = re.compile(
+    #     r'^(.*denselayer\d+\.(?:norm|relu|conv))\.((?:[12])\.(?:weight|bias|running_mean|running_var))$')
+    # for key in list(state_dict.keys()):
+    #     res = pattern.match(key)
+    #     if res:
+    #         new_key = res.group(1) + res.group(2)
+    #         state_dict[new_key] = state_dict[key]
+    #         del state_dict[key]
     # net.load_state_dict(state_dict)
-    a = torch.randn(12, 3, 224, 224)
+    # del net.classifier
+    # net.output_layer = nn.Sequential(
+    #                                 nn.BatchNorm1d(1024 * 4),
+    #                                 nn.Dropout(0.1),
+    #                                 nn.Linear(1024 * 4, 2048),
+    #                                 nn.BatchNorm1d(2048))
+    # torch.save(net.state_dict(), 'trained_models/densenet_121.pth')
+    a = torch.randn(4,3,224,224)
     b = net(a)
     print(b.size())

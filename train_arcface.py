@@ -1,6 +1,7 @@
 import os
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
@@ -10,15 +11,16 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
+from arcface.resnest import ResNeSt
 from arcface.efficientnet import EfficientNet
 from arcface.head import Arcface, LinearLayer
-from dataset import ArcfaceDataset
+from dataset import ArcfaceDataset, HardTripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
 # from utils import AdamW
 from torch.optim import AdamW
 import numpy as np
-from utils import separate_bn_paras
+from utils import separate_bn_paras, collater_HardTriplet
 
 def train(opt):
     print(opt)
@@ -36,12 +38,14 @@ def train(opt):
                         "num_workers": opt.workers}
 
     training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
+    # training_set = HardTripletDataset(
+    #     root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)
 
     opt.num_classes = training_set.num_classes
-    opt.num_labels = training_set.num_labels
-    opt.vocab_size = training_set.vocab_size
-    print(opt.num_classes, opt.vocab_size)
+    # opt.num_labels = training_set.num_labels
+    # opt.vocab_size = training_set.vocab_size
+    # print(opt.num_classes, opt.vocab_size)
 
     if opt.network == 'resnet':
         backbone = ResNet(opt)
@@ -66,6 +70,10 @@ def train(opt):
     elif opt.network == 'resnet_cbam':
         backbone = ResNetCBAM(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_c)
+        h_name = 'arcface_'+b_name
+    elif opt.network == 'resnest':
+        backbone = ResNeSt(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_s)
         h_name = 'arcface_'+b_name
     elif 'efficientnet' in opt.network:
         backbone = EfficientNet(opt)
@@ -135,20 +143,33 @@ def train(opt):
             optimizer.zero_grad()
 
             img = data['img'].cuda()
+            # vdo = data['vdo'].cuda()
             instance = data['instance'].cuda()
-            text = data['text'].cuda()
-            iORv = data['iORv'].cuda()
+            # text = data['text'].cuda()
+            # iORv = data['iORv'].cuda()
             # label = data['label'].cuda()
 
             embedding = backbone(img)
+            # embedding_2 = backbone(vdo)
+
+            # cos = torch.mm(embedding, embedding.t())
+            # cos = F.softmax(cos, dim=1)
+            # embedding_2 = torch.mm(cos, embedding)
+
+            # print(torch.sum(cos, dim=1))
+
             output = head([embedding, instance])
+            # output_2 = head([embedding_2, instance])
             # label_output = linear(embedding)
 
             total += instance.size(0)
             acc += (torch.argmax(output, dim=1)==instance).sum().float()
+            # acc += (torch.argmax(output_2, dim=1)==instance).sum().float()
             # acc_label += (torch.argmax(label_output, dim=1)==label).sum().float()
 
+            # loss = (cost(output_1, instance) + cost(output_2, instance))/2
             loss = cost(output, instance)
+            # loss_2 = cost(output_2, instance)
             # loss_label = cost(label_output, label)
             # loss_head = torch.sum(torch.sum(l2_norm(head.module.kernel, axis=0), dim=1)**2)
             loss_head = 0

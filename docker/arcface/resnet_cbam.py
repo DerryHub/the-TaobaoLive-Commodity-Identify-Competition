@@ -12,7 +12,6 @@ model_urls = {
 }
 
 
-
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -157,9 +156,9 @@ class ResNetCBAM(nn.Module):
         drop_ratio = config.drop_ratio
         model_dic = MODEL[config.num_layers_c]
         layers = model_dic['layers']
-        # embedding_size = 512
+        # embedding_size = 2048
         # drop_ratio = 0.1
-        # layers = [3, 4, 23, 3]
+        # layers = [3, 4, 6, 3]
 
         # self.sentvec = SentVec_TFIDF(embedding_size=embedding_size, root_dir='data/')
         block = Bottleneck
@@ -175,13 +174,14 @@ class ResNetCBAM(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         # self.avgpool = nn.AvgPool2d(4, stride=1)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.fc = nn.Linear(512* block.expansion, 1000)
 
         self.output_layer = nn.Sequential(
-                                       nn.BatchNorm2d(512* block.expansion),
-                                       nn.Dropout(drop_ratio),
-                                       Flatten(),
-                                       nn.Linear(512 * block.expansion, embedding_size),
-                                       nn.BatchNorm1d(embedding_size))
+                                    nn.BatchNorm2d(512 * block.expansion),
+                                    nn.Dropout(drop_ratio),
+                                    Flatten(),
+                                    nn.Linear(512 * block.expansion, embedding_size),
+                                    nn.BatchNorm1d(embedding_size))
 
         # self.last_layer = nn.Sequential(
         #     nn.Linear(2*embedding_size, embedding_size),
@@ -228,9 +228,13 @@ class ResNetCBAM(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)
+        # print(x.size())
         x = self.layer2(x)
+        # print(x.size())
         x = self.layer3(x)
+        # print(x.size())
         x = self.layer4(x)
+        # print(x.size())
 
         x = self.avgpool(x)
         x = self.output_layer(x)
@@ -240,16 +244,16 @@ class ResNetCBAM(nn.Module):
         return l2_norm(x)
 
 if __name__ == "__main__":
-    net = ResNetCBAM()
-    net.load_state_dict(torch.load('trained_models/resnet_cbam_100.pth'))
-    # l = [3, 4, 23, 3]
+    net = ResNetCBAM('aa')
+    # net.load_state_dict(torch.load('trained_models/resnet50-19c8e357.pth'))
+    # l = [3, 4, 6, 3]
     # for i in range(3):
     #     net.layer1[i].ca = ChannelAttention(64 * 4)
     #     net.layer1[i].sa = SpatialAttention()
     # for i in range(4):
     #     net.layer2[i].ca = ChannelAttention(64 * 8)
     #     net.layer2[i].sa = SpatialAttention()
-    # for i in range(23):
+    # for i in range(6):
     #     net.layer3[i].ca = ChannelAttention(64 * 16)
     #     net.layer3[i].sa = SpatialAttention()
     # for i in range(3):
@@ -261,10 +265,11 @@ if __name__ == "__main__":
     #                             nn.BatchNorm2d(512* 4),
     #                             nn.Dropout(0.1),
     #                             Flatten(),
-    #                             nn.Linear(512 * 4, 512),
-    #                             nn.BatchNorm1d(512))
+    #                             nn.Linear(512 * 4, 4096),
+    #                             nn.BatchNorm1d(4096))
+                                
     # del net.fc
-    # torch.save(net.state_dict(), 'trained_models/resnet_cbam_100.pth')
-    # a = torch.randn(5,3,224,224)
-    # b = net(a)
-    # print(b.size())
+    # torch.save(net.state_dict(), 'trained_models/resnet_cbam_50.pth')
+    a = torch.randn(5,3,224,224)
+    b = net(a)
+    print(b.size())

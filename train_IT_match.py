@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from arcface.head import Arcface
 from text.TF_IDF import TF_IDF
 from text.BERT import BERT
+from text.textcnn import TextCNN
 from utils import MSE_match
 import numpy as np
 from tqdm import tqdm
@@ -34,6 +35,9 @@ def train(opt):
     elif opt.network_text == 'tf_idf':
         model = TF_IDF(opt)
         model_name = 'TFIDF_'+dataset.model_name
+    elif opt.network_text == 'textcnn':
+        model = TextCNN(opt)
+        model_name = 'textcnn_'+dataset.model_name
 
     head = Arcface(opt)
     head_name = 'arcface_'+dataset.model_name
@@ -41,7 +45,8 @@ def train(opt):
     if opt.resume:
         print('Loading Models...')
         model.load_state_dict(torch.load(os.path.join(opt.saved_path, model_name+'.pth')))
-        head.load_state_dict(torch.load(os.path.join(opt.saved_path, head_name+'.pth')))
+
+    head.load_state_dict(torch.load(os.path.join(opt.saved_path, head_name+'.pth')))
 
     device = torch.device("cuda:{}".format(device_ids[0]))
 
@@ -78,7 +83,7 @@ def train(opt):
         for iter, data in enumerate(progress_bar):
             optimizer.zero_grad()
 
-            feature = data['feature'].cuda()
+            # feature = data['feature'].cuda()
             text = data['text'].cuda()
             instance = data['instance'].cuda()
 
@@ -88,8 +93,8 @@ def train(opt):
             total += instance.size(0)
             acc += (torch.argmax(output, dim=1)==instance).sum().float()
 
-            loss_mse = cost(text_feature, feature)
-            # loss_mse = 0
+            # loss_mse = cost(text_feature, feature)
+            loss_mse = 0
             loss_arcface = cost_arcface(output, instance)
             loss = loss_mse + loss_arcface
             

@@ -31,6 +31,7 @@ def test(opt):
                    "num_workers": opt.workers}
     test_generator = DataLoader(test_set, **test_params)
     
+    print(opt.network+'_'+opt.imgORvdo)
     model = EfficientDet(opt)
     model.load_state_dict(torch.load(os.path.join(opt.saved_path, opt.network+'_'+opt.imgORvdo+'.pth')))
     model.cuda()
@@ -112,6 +113,10 @@ def test(opt):
                 N_P += cat.size(0)
                 N_GT += annot.size(0)
                 N_GT_ins += int((annot[:, 5] == 1).sum())
+                # if len(cat) == 1:
+                #     N_P_ins += 1
+                #     N_TP_ins += 1
+                # else:
                 N_P_ins += int((cat[:, 10] == 1).sum())
                 # print(cat[:, 10], annot[:, 5])
                 # print(N_GT_ins)
@@ -122,6 +127,7 @@ def test(opt):
                             N_TP_iou += 1
                             if gt[4] in pre[1:6]:
                                 N_TP += 1
+                            # if len(cat) != 1:
                             if gt[5] == pre[10] and gt[5] == 1:
                                 N_TP_ins += 1
             

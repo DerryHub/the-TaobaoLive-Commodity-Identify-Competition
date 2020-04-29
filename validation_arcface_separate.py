@@ -11,7 +11,7 @@ from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
 from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
-from dataset import ValidationArcfaceDataset, ArcfaceDataset
+from dataset import ValidationArcfaceDataset
 from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 from joint_bayesian.JointBayesian import verify
@@ -118,11 +118,17 @@ def evaluate(opt):
         model = DenseNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
     elif opt.network == 'resnet_cbam':
-        model = ResNetCBAM(opt)
+        model_image = ResNetCBAM(opt)
+        model_video = ResNetCBAM(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_c)
+        b_name_image = b_name + '_image'
+        b_name_video = b_name + '_video'
     elif opt.network == 'resnest':
-        model = ResNeSt(opt)
+        model_image = ResNeSt(opt)
+        model_video = ResNeSt(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_s)
+        b_name_image = b_name + '_image'
+        b_name_video = b_name + '_video'
     elif 'efficientnet' in opt.network:
         model = EfficientNet(opt)
         b_name = opt.network
@@ -130,9 +136,13 @@ def evaluate(opt):
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
-    model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
-    model.cuda()
-    model.eval()
+    model_image.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name_image+'.pth')))
+    model_image.cuda()
+    model_image.eval()
+
+    model_video.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name_video+'.pth')))
+    model_video.cuda()
+    model_video.eval()
 
     img_features = np.zeros((0, opt.embedding_size))
     vdo_features = np.zeros((0, opt.embedding_size))
@@ -148,8 +158,8 @@ def evaluate(opt):
         img_e = d['img_e'].cuda()
         vdo_e = d['vdo_e'].cuda()
         with torch.no_grad():
-            img_f = model(img)
-            vdo_f = model(vdo)
+            img_f = model_image(img)
+            vdo_f = model_video(vdo)
 
         img_f = img_f.cpu().numpy()
         vdo_f = vdo_f.cpu().numpy()
@@ -157,23 +167,13 @@ def evaluate(opt):
         img_features = np.append(img_features, img_f, axis=0)
         vdo_features = np.append(vdo_features, vdo_f, axis=0)
 
-    # with open('data/instance2label.json', 'r') as f:
-    #     ins2labDic = json.load(f)
-
     print('Calculating cosine similarity...')
     cos = cosine_similarity(vdo_features, img_features)
     return cos, instances
 
-    # rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
-    # # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)
-    # # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
-    # print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
-    # print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
-    # print(acc)
-
 if __name__ == "__main__":
     opt = get_args_arcface()
-    opt.batch_size *= 4
+    opt.batch_size *= 2
     config_list = opt.validation_config
     cos = 0
     for network, size, num_layers, r in config_list:
@@ -181,8 +181,6 @@ if __name__ == "__main__":
         opt.size = size
         opt.num_layers_c = num_layers
         opt.num_layers_r = num_layers
-        opt.num_layers_d = num_layers
-        opt.num_layers_s = num_layers
         cos_, instances = evaluate(opt)
         cos += cos_ * r
     with open('data/instance2label.json', 'r') as f:
@@ -196,71 +194,20 @@ if __name__ == "__main__":
     # cos = cos_1 + cos_2
     argmax = np.argsort(-cos, axis=1)
     for i in tqdm(range(len(cos))):
-        # i = np.argmax(np.max(cos, axis=1))
         for j in argmax[i]:
             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
                 continue
+            # if j%length == i%length:
             if i==j:
                 acc +=1
                 rates_t.append(cos[i, j])
             else:
                 rates_f.append(cos[i, j])
             break
-        # cos[i, :] = -np.inf
 
     print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
     print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
     print(acc/len(cos))
-    # # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
-    # training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
-    # opt.num_classes = training_set.num_classes
-    # l = os.listdir('data/train_instance')
-    # ll = []
-    # # print(l[:100])
-    # for n in tqdm(l):
-    #     if '219636' in n:
-    #         ll.append(n)
-    # imgs = []
-    # for n in ll:
-    #     img = np.load(os.path.join('data/train_instance/', n)[:-4]+'.npy')
-    #     img = img[7:112+7, 7:112+7, :]
-    #     img = torch.from_numpy(img)
-    #     img = img.permute(2, 0, 1)
-    #     transform = transforms.Normalize(
-    #         mean=[0.55574415, 0.51230767, 0.51123354], 
-    #         std=[0.21303795, 0.21604613, 0.21273348])
-    #     img = transform(img)
-    #     imgs.append(img.unsqueeze(0))
-    # img = torch.cat(imgs)
-    # # features = []
-    # # for i in img:
-    # #     features.append(SIFT(i))
-    # # dis = []
-    # # for i in range(10):
-    # #     dis.append(hamming_distance(features[0], features[i]))
-    # # print(dis)
-    # # print(img.size())
-    # model = InceptionResNetV2(opt)
-    
-    # b_name = opt.network
-    # model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
-    # model.cuda()
-    # model.eval()
-    # img = img.cuda()
-    # with torch.no_grad():
-    #     features = model(img)
-    # from arcface.head import Arcface
-    # opt.m = 0
-    # h = Arcface(opt)
-    # h_name = 'arcface_'+b_name
-    # h.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
-    # h.cuda()
-    # h.eval()
-    # o = h(features).cpu()
-    # o = torch.argmax(o, dim=1)
-    # print(o)
-    # # # # print(ll)
-    # # print(kmeans.predict(features))
 
 
 

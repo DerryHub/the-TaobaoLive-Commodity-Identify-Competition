@@ -67,10 +67,13 @@ def get_args_arcface():
     parser.add_argument("--m", type=float, default=0.5)
     
     parser.add_argument("--network", type=str, default='resnet', 
-                        help="[resnet, googlenet, inceptionv4, inceptionresnetv2, resnet_cbam]")
+                        help="[resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, resnet_cbam]")
 
     parser.add_argument("--validation_config", type=list,
-                        default=[('resnet_cbam', 101, 1), ('resnet_cbam', 50, 0.8)])
+                        default=[('resnet_cbam', 152, 0.6), ('resnest', 50, 0.7), ('resnest', 101, 1)])
+
+    # resnest config
+    parser.add_argument("--num_layers_s", type=int, default=50, help="[50, 101]")
 
     # resnet config
     parser.add_argument("--num_layers_r", type=int, default=50, help="[50, 100, 152]")

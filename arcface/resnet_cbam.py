@@ -158,7 +158,7 @@ class ResNetCBAM(nn.Module):
         layers = model_dic['layers']
         # embedding_size = 2048
         # drop_ratio = 0.1
-        # layers = [3, 8, 36, 3]
+        # layers = [3, 4, 6, 3]
 
         # self.sentvec = SentVec_TFIDF(embedding_size=embedding_size, root_dir='data/')
         block = Bottleneck
@@ -228,9 +228,13 @@ class ResNetCBAM(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)
+        # print(x.size())
         x = self.layer2(x)
+        # print(x.size())
         x = self.layer3(x)
+        # print(x.size())
         x = self.layer4(x)
+        # print(x.size())
 
         x = self.avgpool(x)
         x = self.output_layer(x)
@@ -241,31 +245,31 @@ class ResNetCBAM(nn.Module):
 
 if __name__ == "__main__":
     net = ResNetCBAM('aa')
-    net.load_state_dict(torch.load('trained_models/resnet152-b121ed2d.pth'))
-    l = [3, 8, 36, 3]
-    for i in range(3):
-        net.layer1[i].ca = ChannelAttention(64 * 4)
-        net.layer1[i].sa = SpatialAttention()
-    for i in range(8):
-        net.layer2[i].ca = ChannelAttention(64 * 8)
-        net.layer2[i].sa = SpatialAttention()
-    for i in range(36):
-        net.layer3[i].ca = ChannelAttention(64 * 16)
-        net.layer3[i].sa = SpatialAttention()
-    for i in range(3):
-        net.layer4[i].ca = ChannelAttention(64 * 32)
-        net.layer4[i].sa = SpatialAttention()
+    # net.load_state_dict(torch.load('trained_models/resnet50-19c8e357.pth'))
+    # l = [3, 4, 6, 3]
+    # for i in range(3):
+    #     net.layer1[i].ca = ChannelAttention(64 * 4)
+    #     net.layer1[i].sa = SpatialAttention()
+    # for i in range(4):
+    #     net.layer2[i].ca = ChannelAttention(64 * 8)
+    #     net.layer2[i].sa = SpatialAttention()
+    # for i in range(6):
+    #     net.layer3[i].ca = ChannelAttention(64 * 16)
+    #     net.layer3[i].sa = SpatialAttention()
+    # for i in range(3):
+    #     net.layer4[i].ca = ChannelAttention(64 * 32)
+    #     net.layer4[i].sa = SpatialAttention()
     
-    # net.sentvec = SentVec_TFIDF(embedding_size=512, root_dir='data/')
-    net.output_layer = nn.Sequential(
-                                nn.BatchNorm2d(512* 4),
-                                nn.Dropout(0.1),
-                                Flatten(),
-                                nn.Linear(512 * 4, 2048),
-                                nn.BatchNorm1d(2048))
+    # # net.sentvec = SentVec_TFIDF(embedding_size=512, root_dir='data/')
+    # net.output_layer = nn.Sequential(
+    #                             nn.BatchNorm2d(512* 4),
+    #                             nn.Dropout(0.1),
+    #                             Flatten(),
+    #                             nn.Linear(512 * 4, 4096),
+    #                             nn.BatchNorm1d(4096))
                                 
-    del net.fc
-    torch.save(net.state_dict(), 'trained_models/resnet_cbam_152.pth')
-    # a = torch.randn(5,3,224,224)
-    # b = net(a)
-    # print(b.size())
+    # del net.fc
+    # torch.save(net.state_dict(), 'trained_models/resnet_cbam_50.pth')
+    a = torch.randn(5,3,224,224)
+    b = net(a)
+    print(b.size())

@@ -10,6 +10,7 @@ from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
 from text.TF_IDF import TF_IDF
 from text.BERT import BERT
+from text.textcnn import TextCNN
 from config import get_args_arcface
 from dataset import ITMatchValidation
 from tqdm import tqdm
@@ -55,6 +56,9 @@ if opt.network_text == 'bert':
 elif opt.network_text == 'tf_idf':
     model_text = TF_IDF(opt)
     model_name = 'TFIDF_'+b_name
+elif opt.network_text == 'textcnn':
+    model_text = TextCNN(opt)
+    model_name = 'textcnn_'+b_name
 
 print(model_name)
 

@@ -16,14 +16,14 @@ opt = get_args_efficientdet()
 #                                PAD=opt.PAD)
 
 # loader = DataLoader(training_set, num_workers=2, batch_size=2, collate_fn=collater)
-opt.num_classes = 23
+opt.num_classes = 90
 net = EfficientDet(opt)
-net.load_state_dict(torch.load('trained_models/efficientdet-d0.pth'))
-# net.classifier = Classifier(in_channels=64, num_anchors=9,
-#                                      num_classes=23,
-#                                      num_layers=3)
-# net.instance = Instance(in_channels=64, num_anchors=9, num_layers=3)
-# torch.save(net.state_dict(), 'trained_models/efficientdet-d0.pth')
+net.load_state_dict(torch.load('trained_models/efficientdet-d4.pth'))
+net.classifier = Classifier(in_channels=224, num_anchors=9,
+                                     num_classes=23,
+                                     num_layers=4)
+net.instance = Instance(in_channels=224, num_anchors=9, num_layers=4)
+torch.save(net.state_dict(), 'trained_models/efficientdet-d4.pth')
 # net.cuda()
 # net.eval()
 # cost = FocalLoss()
