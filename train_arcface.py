@@ -43,6 +43,8 @@ def train(opt):
     training_generator = DataLoader(training_set, **training_params)
 
     opt.num_classes = training_set.num_classes
+    print(len(training_set))
+    print(opt.num_classes)
     # opt.num_labels = training_set.num_labels
     # opt.vocab_size = training_set.vocab_size
     # print(opt.num_classes, opt.vocab_size)

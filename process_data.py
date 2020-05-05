@@ -294,6 +294,59 @@ def createInstanceID(root_dir='data'):
     with open(os.path.join(root_dir, 'instanceID.json'), 'w') as f:
         json.dump(clsDic, f)
 
+def createInstanceID_ALL(root_dir='data'):
+    modes = ['train', 'validation']
+
+    all_ids = set([])
+    for mode in modes:
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
+
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
+
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
+
+        instance = {}
+        s_i = set([])
+        s_v = set([])
+
+        
+
+        for d in l_i:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    s_i.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
+                    else:
+                        instance[dd['instance_id']] += 1
+
+        for d in l_v:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    s_v.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
+                    else:
+                        instance[dd['instance_id']] += 1
+
+        id_set = s_i & s_v
+        
+        for ID in id_set:
+            # if instance[ID] > 10 and instance[ID] < 20:
+            all_ids.add(ID)
+
+    clsDic = {}
+
+    for i in all_ids:
+        clsDic[i] = len(clsDic)
+    # print(len(clsDic))
+    with open(os.path.join(root_dir, 'instanceID_all.json'), 'w') as f:
+        json.dump(clsDic, f)
 
 def createText(mode, root_dir='data'):
     if mode == 'train':
@@ -426,8 +479,9 @@ if __name__ == "__main__":
     # saveNumpyInstance('data', 'validation', (128, 128))
 #     createInstance2Label('data')
     # createInstanceID()
+    createInstanceID_ALL()
     # createText(mode='train')
     # createText(mode='validation')
-    createVocab()
-    createTF_IDF()
+    # createVocab()
+    # createTF_IDF()
 

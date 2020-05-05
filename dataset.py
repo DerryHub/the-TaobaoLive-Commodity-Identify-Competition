@@ -283,92 +283,70 @@ class EfficientdetDataset(Dataset):
 
 class ArcfaceDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, maxLen=64, PAD=0, imgORvdo='all'):
-        assert mode in ['train']
+        assert mode in ['train', 'all']
         assert imgORvdo in ['all', 'image', 'video']
 
         self.root_dir = root_dir
         self.size = size
         self.flip_x = flip_x
 
-        if imgORvdo == 'all':
-            tats = [mode + '_images', mode + '_videos']
-        elif imgORvdo == 'image':
-            tats = [mode + '_images']
-        elif imgORvdo == 'video':
-            tats = [mode + '_videos']
+        if mode == 'train':
+            modes = ['train']
+            instanceFile = 'instanceID.json'
+        else:
+            modes = ['train', 'validation']
+            instanceFile = 'instanceID_all.json'
 
-        # img_tat = mode + '_images'
-        # vdo_tat = mode + '_videos'
-        savePath = mode + '_instance'
-        self.savePath = os.path.join(root_dir, savePath)
-
-        text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
-        self.vocab_size = text2num.vocab_size
-
-        d = []
-        self.textDic = []
-        for tat in tats:
-            with open(os.path.join(root_dir, tat+'_annotation.json'), 'r') as f:
-                d.append(json.load(f))
-            with open(os.path.join(root_dir, tat+'_text.json'), 'r') as f:
-                self.textDic.append(json.load(f))
-        # with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
-        #     d_i = json.load(f)
-        # with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
-        #     d_v = json.load(f)
-
-        # with open(os.path.join(root_dir, img_tat+'_text.json'), 'r') as f:
-        #     self.textDic_i = json.load(f)
-        # with open(os.path.join(root_dir, vdo_tat+'_text.json'), 'r') as f:
-        #     self.textDic_v = json.load(f)
-        for i in range(len(self.textDic)):
-            for k in self.textDic[i].keys():
-                self.textDic[i][k] = text2num(self.textDic[i][k])
-        # for k in self.textDic_i.keys():
-        #     self.textDic_i[k] = text2num(self.textDic_i[k])
-        # for k in self.textDic_v.keys():
-        #     self.textDic_v[k] = text2num(self.textDic_v[k])
-        l = [dd['annotations'] for dd in d]
-        # l_i = d_i['annotations']
-        # l_v = d_v['annotations']
-
-        self.images = []
-
-        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+        with open(os.path.join(root_dir, instanceFile), 'r') as f:
             self.clsDic = json.load(f)
         with open(os.path.join(root_dir, 'instance2label.json'), 'r') as f:
             self.instance2label = json.load(f)
 
-        print('Loading data...')
-        for i, ll in enumerate(l):
-            for d in ll:
-                for dd in d['annotations']:
-                    if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                        t = []
-                        t.append(os.path.join(str(dd['instance_id']), tats[i]+str(dd['instance_id'])+d['img_name']))
-                        t.append(dd['instance_id'])
-                        t.append(d['img_name'].split('_')[0])
-                        t.append(i)
-                        self.images.append(t)
-        # for d in l_i:
-        #     for dd in d['annotations']:
-        #         if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-        #             t = []
-        #             t.append(os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-        #             t.append(dd['instance_id'])
-        #             t.append(d['img_name'].split('_')[0])
-        #             t.append('image')
-        #             self.images.append(t)
+        text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
+        self.images = []
+        self.textDics = {}
+        for mode in modes:
+            if imgORvdo == 'all':
+                tats = [mode + '_images', mode + '_videos']
+            elif imgORvdo == 'image':
+                tats = [mode + '_images']
+            elif imgORvdo == 'video':
+                tats = [mode + '_videos']
 
-        # for d in l_v:
-        #     for dd in d['annotations']:
-        #         if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-        #             t = []
-        #             t.append(os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
-        #             t.append(dd['instance_id'])
-        #             t.append(d['img_name'].split('_')[0])
-        #             t.append('video')
-        #             self.images.append(t)
+            # img_tat = mode + '_images'
+            # vdo_tat = mode + '_videos'
+            savePath = mode + '_instance'
+            self.savePath = os.path.join(root_dir, savePath)
+
+            d = []
+            textDic = []
+            for tat in tats:
+                with open(os.path.join(root_dir, tat+'_annotation.json'), 'r') as f:
+                    d.append(json.load(f))
+                with open(os.path.join(root_dir, tat+'_text.json'), 'r') as f:
+                    textDic.append(json.load(f))
+                    
+            for i in range(len(textDic)):
+                for k in textDic[i].keys():
+                    textDic[i][k] = text2num(textDic[i][k])
+            
+            self.textDics[mode] = textDic
+                    
+            l = [dd['annotations'] for dd in d]
+
+            print('Loading data...')
+            for i, ll in enumerate(l):
+                for d in ll:
+                    for dd in d['annotations']:
+                        if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                            t = []
+                            t.append(os.path.join(self.savePath, str(dd['instance_id']), tats[i]+str(dd['instance_id'])+d['img_name']))
+                            t.append(dd['instance_id'])
+                            t.append(d['img_name'].split('_')[0])
+                            t.append(i)
+                            t.append(mode)
+                            self.images.append(t)
 
         self.num_classes = len(self.clsDic)
         self.num_labels = len(set(self.instance2label.values()))
@@ -383,9 +361,9 @@ class ArcfaceDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        imgName, instance_id, textName, iORv = self.images[index]
-        img = np.load(os.path.join(self.savePath, imgName)[:-4]+'.npy')
-        text = self.textDic[iORv][textName]
+        imgName, instance_id, textName, iORv, mode = self.images[index]
+        img = np.load(imgName[:-4]+'.npy')
+        text = self.textDics[mode][iORv][textName]
         
         text = torch.tensor(text).long()
         iORv = torch.tensor(iORv).long()

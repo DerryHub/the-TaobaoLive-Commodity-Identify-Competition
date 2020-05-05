@@ -412,21 +412,48 @@ def test(opt_a, opt_e):
             # cos_ = cosine_similarity(vdo_f, img_f)
             # cos += np.max((cos_[:len(vdo_index), :len(img_index)], cos_[:len(vdo_index), len(img_index):], cos_[len(vdo_index):, :len(img_index)], cos_[len(vdo_index):, len(img_index):]), axis=0)
             cos += cosine_similarity(vdo_f, img_f)
+        max_sim = -np.inf
+        max_img_i = None
+        max_vdo_i = None
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
-            simis_is = np.argsort(-np.array(simis))[:3]
+            # simis_i = np.argmax(simis)
+            simis_is = np.argsort(-np.array(simis))
             for simis_i in simis_is:
-                if simis[simis_i] < 0.2:
+                if simis[simis_i] < max_sim:
                     break
-                img_i = img_index[simis_i]
-                d = {}
-                d['img_name'] = img_frames[img_i]
-                d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
-                d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
-                result[vdo_id]['result'].append(d)
+                img_c = img_classes[img_index[simis_i]]
+                vdo_c = vdo_classes[index]
+                if len(set(vdo_c) & set(img_c)) == 0:
+                    continue
+                max_sim = simis[simis_i]
+                max_img_i = img_index[simis_i]
+                max_vdo_i = index
+                break
+            # if simis[simis_i] > max_sim:
+            #     max_sim = simis[simis_i]
+            #     max_img_i = img_index[simis_i]
+            #     max_vdo_i = index
+            # simis_is = np.argsort(-np.array(simis))[:3]
+            # for simis_i in simis_is:
+            #     if simis[simis_i] < 0.2:
+            #         break
+            #     img_i = img_index[simis_i]
+            #     d = {}
+            #     d['img_name'] = img_frames[img_i]
+            #     d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
+            #     d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
+            #     result[vdo_id]['result'].append(d)
+        if max_img_i is not None:
+            d = {}
+            d['img_name'] = img_frames[max_img_i]
+            d['item_box'] = list(map(int, img_boxes[max_img_i].tolist()))
+            d['frame_box'] = list(map(int, vdo_boxes[max_vdo_i].tolist()))
+            result[vdo_id]['result'].append(d)
 
         if len(result[vdo_id]['result']) == 0:
             del result[vdo_id]
+
 
     print(len(result))
 

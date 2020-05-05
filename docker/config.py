@@ -3,7 +3,7 @@ import argparse
 def get_args_efficientdet():
     parser = argparse.ArgumentParser("EfficientDet")
     parser.add_argument("--image_size", type=int, default=512, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=256, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=128, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
@@ -16,7 +16,7 @@ def get_args_efficientdet():
     parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_3w", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=None)
-    parser.add_argument('--network', default='efficientdet-d0', type=str,
+    parser.add_argument('--network', default='efficientdet-d4', type=str,
                         help='efficientdet-[d0, d1, ..]')
     parser.add_argument("--is_training", type=bool, default=True)
     parser.add_argument('--resume', type=bool, default=True)
@@ -25,8 +25,8 @@ def get_args_efficientdet():
     parser.add_argument("--cls_threshold", type=float, default=0.3)
     parser.add_argument('--cls_2_threshold', type=float, default=0.5)
     parser.add_argument('--iou_threshold', type=float, default=0.4)
-    parser.add_argument('--instance_threshold_image', type=float, default=0.3)
-    parser.add_argument('--instance_threshold_video', type=float, default=0.3)
+    parser.add_argument('--instance_threshold_image', type=float, default=0.35)
+    parser.add_argument('--instance_threshold_video', type=float, default=0.35)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
     parser.add_argument("--workers", type=int, default=8)
 
@@ -70,7 +70,7 @@ def get_args_arcface():
                         help="[resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, resnet_cbam]")
 
     parser.add_argument("--validation_config", type=list,
-                        default=[('resnet_cbam', 152, 0.6), ('resnest', 50, 0.7), ('resnest', 101, 1)])
+                        default=[('resnest', 50, 0.8),('resnest', 101, 1),('resnet_cbam', 101, 0.8)])
 
     # resnest config
     parser.add_argument("--num_layers_s", type=int, default=50, help="[50, 101]")
