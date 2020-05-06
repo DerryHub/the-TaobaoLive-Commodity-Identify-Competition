@@ -475,8 +475,8 @@ if __name__ == "__main__":
 #     label['index2label'] = {}
 #     processTrain(label)
 #     processValidation(label)
-    # saveNumpyInstance('data', 'train', (128, 128))
-    # saveNumpyInstance('data', 'validation', (128, 128))
+    # saveNumpyInstance('data', 'train', (256, 256))
+    # saveNumpyInstance('data', 'validation', (256, 256))
 #     createInstance2Label('data')
     # createInstanceID()
     createInstanceID_ALL()
