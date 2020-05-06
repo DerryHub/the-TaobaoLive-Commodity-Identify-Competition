@@ -538,6 +538,9 @@ class EfficientDet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
+    
+    def set_is_training(self, value):
+        pass
 
     def forward(self, inputs):
         if self.training:
