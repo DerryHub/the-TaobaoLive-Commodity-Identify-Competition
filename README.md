@@ -157,5 +157,5 @@ docker push image_name
 
 ## Test
 ```shell
-nvidia-docker run -v /data/validation_dataset_part1:/tcdata/test_dataset_3w your_image sh run.sh
+nvidia-docker run -v /data/validation_dataset_part1:/tcdata/test_dataset_3w image_name sh run.sh
 ```
