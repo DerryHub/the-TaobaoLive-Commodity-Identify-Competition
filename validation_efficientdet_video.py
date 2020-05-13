@@ -23,7 +23,7 @@ def test(opt):
     test_set = EfficientdetDatasetVideo(opt.data_path, mode='validation', transform=transforms.Compose([Normalizer_video(), Resizer_video()]), imgORvdo=opt.imgORvdo)
     opt.num_classes = test_set.num_classes
     opt.vocab_size = test_set.vocab_size
-    opt.batch_size = 2
+    opt.batch_size = 1
     test_params = {"batch_size": opt.batch_size,
                    "shuffle": False,
                    "drop_last": False,

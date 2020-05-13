@@ -12,6 +12,7 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
+from arcface.iresnet import iResNet
 from arcface.efficientnet import EfficientNet
 from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDataset, HardTripletDataset
@@ -24,7 +25,9 @@ from utils import separate_bn_paras, collater_HardTriplet
 
 def train(opt):
     print(opt)
-    device_ids = opt.GPUs
+    gpus = list(map(str, opt.GPUs))
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(gpus)
+    device_ids = list(range(len(gpus)))
     if torch.cuda.is_available():
         num_gpus = len(device_ids)
     else:
@@ -37,7 +40,7 @@ def train(opt):
                         "drop_last": True,
                         "num_workers": opt.workers}
 
-    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="all", size=(opt.size, opt.size))
+    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
     # training_set = HardTripletDataset(
     #     root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)
@@ -76,6 +79,10 @@ def train(opt):
     elif opt.network == 'resnest':
         backbone = ResNeSt(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_s)
+        h_name = 'arcface_'+b_name
+    elif opt.network == 'iresnet':
+        backbone = iResNet(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_i)
         h_name = 'arcface_'+b_name
     elif 'efficientnet' in opt.network:
         backbone = EfficientNet(opt)

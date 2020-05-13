@@ -74,10 +74,12 @@ def get_args_arcface():
     parser.add_argument("--n_samples", type=int, default=4)
     parser.add_argument("--network_text", type=str, default='textcnn', help="[bert, tf_idf, textcnn]")
     parser.add_argument("--network", type=str, default='resnest', 
-                        help="[resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, densenet, resnet_cbam, efficientnet-b[0~8]]")
+                        help="[iresnet, resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, densenet, resnet_cbam, efficientnet-b[0~8]]")
     
     parser.add_argument("--validation_config", type=list,
                         default=[('resnest', 224, 50, 1)])
+    # iresnet config
+    parser.add_argument("--num_layers_i", type=int, default=50, help="[50, 101, 152]")
 
     # resnest config
     parser.add_argument("--num_layers_s", type=int, default=50, help="[50, 101]")

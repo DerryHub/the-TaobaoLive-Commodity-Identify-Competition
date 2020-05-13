@@ -451,7 +451,7 @@ def test(opt_a, opt_e):
             max_sim = max_i[0][0]
             if max_sim > 0.35 * len(img_features_list):
                 for sim, max_img_i, max_vdo_i in max_i:
-                    if sim > max_sim - 0.1 * len(img_features_list):
+                    if sim > max_sim - 0.15 * len(img_features_list):
                         d = {}
                         d['img_name'] = img_frames[max_img_i]
                         d['item_box'] = list(map(int, img_boxes[max_img_i].tolist()))

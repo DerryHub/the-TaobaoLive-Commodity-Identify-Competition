@@ -10,6 +10,7 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
+from arcface.iresnet import iResNet
 from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
@@ -124,6 +125,9 @@ def evaluate(opt):
     elif opt.network == 'resnest':
         model = ResNeSt(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_s)
+    elif opt.network == 'iresnet':
+        model = iResNet(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_i)
     elif 'efficientnet' in opt.network:
         model = EfficientNet(opt)
         b_name = opt.network
@@ -139,7 +143,7 @@ def evaluate(opt):
     vdo_features = np.zeros((0, opt.embedding_size))
     instances = []
 
-    sizes = [224, 112]
+    sizes = [224]
     print('Predecting...')
     for s in sizes:
         for d in tqdm(loader):
@@ -167,14 +171,19 @@ def evaluate(opt):
     #     ins2labDic = json.load(f)
 
     print('Calculating cosine similarity...')
-    cos = cosine_similarity(vdo_features, img_features)
-    length = len(cos) // len(sizes)
-    coss = []
-    for i in range(length):
-        for j in range(length):
-            coss.append(cos[i*length:(i+1)*length, j*length:(j+1)*length])
-    cos = np.max(coss)
-    return cos, instances[:length]
+    cos = np.zeros([len(vdo_features), len(img_features)])
+    for i in tqdm(range(len(cos)//1000)):
+        cos[i*1000:(i+1)*1000] = cosine_similarity(vdo_features[i*1000:(i+1)*1000], img_features)
+    # length = len(cos) // len(sizes)
+    # coss = []
+    # for i in range(len(sizes)):
+    #     for j in range(len(sizes)):
+    #         coss.append(cos[i*length:(i+1)*length, j*length:(j+1)*length])
+    # # cos = np.max([np.max(coss[:2], axis=0), np.max(coss[2:], axis=0)], axis=0)
+    # cos_1 = np.max(coss[:2], axis=0)
+    # cos_2 = np.max(coss[2:], axis=0)
+    # cos = np.max([cos_1, cos_2], axis=0)
+    return cos, instances
 
     # rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
     # # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)
@@ -191,11 +200,13 @@ if __name__ == "__main__":
     for network, size, num_layers, r in config_list:
         opt.network = network
         opt.size = size
+        opt.num_layers_i = num_layers
         opt.num_layers_c = num_layers
         opt.num_layers_r = num_layers
         opt.num_layers_d = num_layers
         opt.num_layers_s = num_layers
         cos_, instances = evaluate(opt)
+        # print('aaa')
         cos += cos_ * r
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
@@ -205,6 +216,11 @@ if __name__ == "__main__":
     length = len(instances) // 2
     # cos_1 = np.min((cos[:length, :length], cos[length:, length:], cos[length:, :length], cos[:length, length:]), axis=0)
     cos = np.max((cos[:length, :length], cos[length:, length:], cos[length:, :length], cos[:length, length:]), axis=0)
+    # print('bbb')
+    # coss_1 = np.max(coss[:4], axis=0)
+    # coss_2 = np.max(coss[4:10], axis=0)
+    # coss_3 = np.max(coss[10:], axis=0)
+    # cos = np.max([coss_1, coss_2, coss_3], axis=0)
     # cos = cos_1 + cos_2
     argmax = np.argsort(-cos, axis=1)
     for i in tqdm(range(len(cos))):

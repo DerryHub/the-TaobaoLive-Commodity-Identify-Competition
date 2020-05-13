@@ -470,18 +470,18 @@ def createTF_IDF(root_dir='data', mode='train'):
     
 
 if __name__ == "__main__":
-#     label = {}
-#     label['label2index'] = {}
-#     label['index2label'] = {}
-#     processTrain(label)
-#     processValidation(label)
-    # saveNumpyInstance('data', 'train', (256, 256))
-    # saveNumpyInstance('data', 'validation', (256, 256))
-#     createInstance2Label('data')
-    # createInstanceID()
+    label = {}
+    label['label2index'] = {}
+    label['index2label'] = {}
+    processTrain(label)
+    processValidation(label)
+    saveNumpyInstance('data', 'train', (256, 256))
+    saveNumpyInstance('data', 'validation', (256, 256))
+    createInstance2Label('data')
+    createInstanceID()
     createInstanceID_ALL()
-    # createText(mode='train')
-    # createText(mode='validation')
-    # createVocab()
-    # createTF_IDF()
+    createText(mode='train')
+    createText(mode='validation')
+    createVocab()
+    createTF_IDF()
 
