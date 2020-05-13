@@ -1,48 +1,38 @@
+import itertools
 import torch
 import torch.nn as nn
 import numpy as np
 
+
 class BBoxTransform(nn.Module):
+    def forward(self, anchors, regression):
+        """
+        decode_box_outputs adapted from https://github.com/google/automl/blob/master/efficientdet/anchors.py
 
-    def __init__(self, mean=None, std=None):
-        super(BBoxTransform, self).__init__()
-        if mean is None:
-            self.mean = torch.from_numpy(np.array([0, 0, 0, 0]).astype(np.float32))
-        else:
-            self.mean = mean
-        if std is None:
-            self.std = torch.from_numpy(np.array([0.1, 0.1, 0.2, 0.2]).astype(np.float32))
-        else:
-            self.std = std
-        if torch.cuda.is_available():
-            self.mean = self.mean.cuda()
-            self.std = self.std.cuda()
+        Args:
+            anchors: [batchsize, boxes, (y1, x1, y2, x2)]
+            regression: [batchsize, boxes, (dy, dx, dh, dw)]
 
-    def forward(self, boxes, deltas):
+        Returns:
 
-        widths = boxes[:, :, 2] - boxes[:, :, 0]
-        heights = boxes[:, :, 3] - boxes[:, :, 1]
-        ctr_x = boxes[:, :, 0] + 0.5 * widths
-        ctr_y = boxes[:, :, 1] + 0.5 * heights
+        """
+        y_centers_a = (anchors[..., 0] + anchors[..., 2]) / 2
+        x_centers_a = (anchors[..., 1] + anchors[..., 3]) / 2
+        ha = anchors[..., 2] - anchors[..., 0]
+        wa = anchors[..., 3] - anchors[..., 1]
 
-        dx = deltas[:, :, 0] * self.std[0] + self.mean[0]
-        dy = deltas[:, :, 1] * self.std[1] + self.mean[1]
-        dw = deltas[:, :, 2] * self.std[2] + self.mean[2]
-        dh = deltas[:, :, 3] * self.std[3] + self.mean[3]
+        w = regression[..., 3].exp() * wa
+        h = regression[..., 2].exp() * ha
 
-        pred_ctr_x = ctr_x + dx * widths
-        pred_ctr_y = ctr_y + dy * heights
-        pred_w = torch.exp(dw) * widths
-        pred_h = torch.exp(dh) * heights
+        y_centers = regression[..., 0] * ha + y_centers_a
+        x_centers = regression[..., 1] * wa + x_centers_a
 
-        pred_boxes_x1 = pred_ctr_x - 0.5 * pred_w
-        pred_boxes_y1 = pred_ctr_y - 0.5 * pred_h
-        pred_boxes_x2 = pred_ctr_x + 0.5 * pred_w
-        pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
+        ymin = y_centers - h / 2.
+        xmin = x_centers - w / 2.
+        ymax = y_centers + h / 2.
+        xmax = x_centers + w / 2.
 
-        pred_boxes = torch.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], dim=2)
-
-        return pred_boxes
+        return torch.stack([xmin, ymin, xmax, ymax], dim=2)
 
 
 class ClipBoxes(nn.Module):
@@ -56,99 +46,92 @@ class ClipBoxes(nn.Module):
         boxes[:, :, 0] = torch.clamp(boxes[:, :, 0], min=0)
         boxes[:, :, 1] = torch.clamp(boxes[:, :, 1], min=0)
 
-        boxes[:, :, 2] = torch.clamp(boxes[:, :, 2], max=width)
-        boxes[:, :, 3] = torch.clamp(boxes[:, :, 3], max=height)
+        boxes[:, :, 2] = torch.clamp(boxes[:, :, 2], max=width - 1)
+        boxes[:, :, 3] = torch.clamp(boxes[:, :, 3], max=height - 1)
 
         return boxes
 
 
 class Anchors(nn.Module):
-    def __init__(self, pyramid_levels=None, strides=None, sizes=None, ratios=None, scales=None):
-        super(Anchors, self).__init__()
+    """
+    adapted and modified from https://github.com/google/automl/blob/master/efficientdet/anchors.py by Zylo117
+    """
+
+    def __init__(self, anchor_scale=4., pyramid_levels=None, **kwargs):
+        super().__init__()
+        self.anchor_scale = anchor_scale
 
         if pyramid_levels is None:
             self.pyramid_levels = [3, 4, 5, 6, 7]
-        if strides is None:
-            self.strides = [2 ** x for x in self.pyramid_levels]
-            # [8, 16, 32, 64, 128]
-            # 扫描步长
-        if sizes is None:
-            self.sizes = [2 ** (x + 2) for x in self.pyramid_levels]
-            # [32, 64, 128, 256, 512]
-            # 基础anchor边长
-        if ratios is None:
-            self.ratios = np.array([0.5, 1, 2])
-            # 长宽比
-        if scales is None:
-            self.scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
-            # 边长放缩
-        self.num_anchors = len(self.ratios) * len(self.scales)
 
-    def forward(self, image):
+        self.strides = kwargs.get('strides', [2 ** x for x in self.pyramid_levels])
+        self.scales = np.array(kwargs.get('scales', [2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)]))
+        self.ratios = kwargs.get('ratios', [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)])
 
+        self.last_anchors = {}
+        self.last_shape = None
+
+    def forward(self, image, dtype=torch.float32):
+        """Generates multiscale anchor boxes.
+
+        Args:
+          image_size: integer number of input image size. The input image has the
+            same dimension for width and height. The image_size should be divided by
+            the largest feature stride 2^max_level.
+          anchor_scale: float number representing the scale of size of the base
+            anchor to the feature stride 2^level.
+          anchor_configs: a dictionary with keys as the levels of anchors and
+            values as a list of anchor configuration.
+
+        Returns:
+          anchor_boxes: a numpy array with shape [N, 4], which stacks anchors on all
+            feature levels.
+        Raises:
+          ValueError: input size must be the multiple of largest feature stride.
+        """
         image_shape = image.shape[2:]
-        image_shape = np.array(image_shape)
-        image_shapes = [(image_shape + 2 ** x - 1) // (2 ** x) for x in self.pyramid_levels]
 
-        all_anchors = np.zeros((0, 4)).astype(np.float32)
+        if image_shape == self.last_shape and image.device in self.last_anchors:
+            return self.last_anchors[image.device]
 
-        for idx, p in enumerate(self.pyramid_levels):
-            anchors = generate_anchors(base_size=self.sizes[idx], ratios=self.ratios, scales=self.scales)
-            shifted_anchors = shift(image_shapes[idx], self.strides[idx], anchors)
-            all_anchors = np.append(all_anchors, shifted_anchors, axis=0)
+        if self.last_shape is None or self.last_shape != image_shape:
+            self.last_shape = image_shape
 
-        all_anchors = np.expand_dims(all_anchors, axis=0)
+        if dtype == torch.float16:
+            dtype = np.float16
+        else:
+            dtype = np.float32
 
-        anchors = torch.from_numpy(all_anchors.astype(np.float32))
-        if torch.cuda.is_available():
-            anchors = anchors.cuda()
-        return anchors
+        boxes_all = []
+        for stride in self.strides:
+            boxes_level = []
+            for scale, ratio in itertools.product(self.scales, self.ratios):
+                if image_shape[1] % stride != 0:
+                    raise ValueError('input size must be divided by the stride.')
+                base_anchor_size = self.anchor_scale * stride * scale
+                anchor_size_x_2 = base_anchor_size * ratio[0] / 2.0
+                anchor_size_y_2 = base_anchor_size * ratio[1] / 2.0
 
+                x = np.arange(stride / 2, image_shape[1], stride)
+                y = np.arange(stride / 2, image_shape[0], stride)
+                xv, yv = np.meshgrid(x, y)
+                xv = xv.reshape(-1)
+                yv = yv.reshape(-1)
 
-def generate_anchors(base_size=16, ratios=None, scales=None):
-    if ratios is None:
-        ratios = np.array([0.5, 1, 2])
+                # y1,x1,y2,x2
+                boxes = np.vstack((yv - anchor_size_y_2, xv - anchor_size_x_2,
+                                   yv + anchor_size_y_2, xv + anchor_size_x_2))
+                boxes = np.swapaxes(boxes, 0, 1)
+                boxes_level.append(np.expand_dims(boxes, axis=1))
+            # concat anchors on the same level to the reshape NxAx4
+            boxes_level = np.concatenate(boxes_level, axis=1)
+            boxes_all.append(boxes_level.reshape([-1, 4]))
 
-    if scales is None:
-        scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+        anchor_boxes = np.vstack(boxes_all)
 
-    num_anchors = len(ratios) * len(scales)
-    anchors = np.zeros((num_anchors, 4))
-    anchors[:, 2:] = base_size * np.tile(scales, (2, len(ratios))).T
-    areas = anchors[:, 2] * anchors[:, 3]
-    anchors[:, 2] = np.sqrt(areas / np.repeat(ratios, len(scales)))
-    anchors[:, 3] = anchors[:, 2] * np.repeat(ratios, len(scales))
-    anchors[:, 0::2] -= np.tile(anchors[:, 2] * 0.5, (2, 1)).T
-    anchors[:, 1::2] -= np.tile(anchors[:, 3] * 0.5, (2, 1)).T
+        anchor_boxes = torch.from_numpy(anchor_boxes.astype(dtype)).to(image.device)
+        anchor_boxes = anchor_boxes.unsqueeze(0)
 
-    return anchors
-
-
-def compute_shape(image_shape, pyramid_levels):
-    image_shape = np.array(image_shape[:2])
-    image_shapes = [(image_shape + 2 ** x - 1) // (2 ** x) for x in pyramid_levels]
-    return image_shapes
-
-
-def shift(shape, stride, anchors):
-    shift_x = (np.arange(0, shape[1]) + 0.5) * stride
-    shift_y = (np.arange(0, shape[0]) + 0.5) * stride
-    shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-    # print(shift_x)
-    shifts = np.vstack((
-        shift_x.ravel(), shift_y.ravel(),
-        shift_x.ravel(), shift_y.ravel()
-    )).transpose()
-    # print(shifts.shape)
-    A = anchors.shape[0]
-    K = shifts.shape[0]
-    all_anchors = (anchors.reshape((1, A, 4)) + shifts.reshape((1, K, 4)).transpose((1, 0, 2)))
-    all_anchors = all_anchors.reshape((K * A, 4))
-
-    return all_anchors
-
-if __name__ == "__main__":
-    anchor = Anchors()
-    a = torch.randn([2, 3, 512, 512])
-    output = anchor(a)
-    print(output)
+        # save it for later use to reduce overhead
+        self.last_anchors[image.device] = anchor_boxes
+        return anchor_boxes

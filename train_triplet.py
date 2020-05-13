@@ -10,6 +10,7 @@ from arcface.googlenet import GoogLeNet
 from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
+from arcface.resnest import ResNeSt
 from arcface.head import Arcface, LinearLayer
 from dataset import TripletDataset
 from config import get_args_arcface
@@ -58,10 +59,14 @@ def train(opt):
         backbone = DenseNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
         h_name = 'arcface_'+b_name
+    elif opt.network == 'resnest':
+        backbone = ResNeSt(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_s)
+        h_name = 'arcface_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
-    head = Arcface(opt)
+    # head = Arcface(opt)
 
     print('backbone: {}'.format(b_name))
     print('head: {}'.format(h_name))
@@ -69,8 +74,8 @@ def train(opt):
     if opt.resume:
         print('Loading model...')
         backbone.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
-        if os.path.isfile(os.path.join(opt.saved_path, h_name+'.pth')):
-            head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
+        # if os.path.isfile(os.path.join(opt.saved_path, h_name+'.pth')):
+        #     head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
 
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
@@ -82,11 +87,15 @@ def train(opt):
     backbone.to(device)
     backbone = nn.DataParallel(backbone, device_ids=device_ids)
 
-    head.to(device)
-    head = nn.DataParallel(head, device_ids=device_ids)
+    # head.to(device)
+    # head = nn.DataParallel(head, device_ids=device_ids)
 
+    # optimizer = AdamW([
+    #             {'params': paras_wo_bn + [head.module.kernel], 'weight_decay': 5e-4},
+    #             {'params': paras_only_bn}
+    #         ], opt.lr)
     optimizer = AdamW([
-                {'params': paras_wo_bn + [head.module.kernel], 'weight_decay': 5e-4},
+                {'params': paras_wo_bn, 'weight_decay': 5e-4},
                 {'params': paras_only_bn}
             ], opt.lr)
 
@@ -124,19 +133,21 @@ def train(opt):
             embedding_p = backbone(img_p)
             embedding_n = backbone(img_n)
 
-            output_q = head([embedding_q, img_q_instance])
-            output_p = head([embedding_p, img_p_instance])
-            output_n = head([embedding_n, img_n_instance])
+            # output_q = head([embedding_q, img_q_instance])
+            # output_p = head([embedding_p, img_p_instance])
+            # output_n = head([embedding_n, img_n_instance])
 
             loss_1 = cost(embedding_q, embedding_p, embedding_n)
-            loss_2_q = cost_arcface(output_q, img_q_instance)
-            loss_2_p = cost_arcface(output_p, img_p_instance)
-            loss_2_n = cost_arcface(output_n, img_n_instance)
+            # loss_2_q = cost_arcface(output_q, img_q_instance)
+            # loss_2_p = cost_arcface(output_p, img_p_instance)
+            # loss_2_n = cost_arcface(output_n, img_n_instance)
 
-            total += embedding_q.size(0) *3
-            acc += (torch.argmax(output_q, dim=1)==img_q_instance).sum().float()
-            acc += (torch.argmax(output_p, dim=1)==img_p_instance).sum().float()
-            acc += (torch.argmax(output_n, dim=1)==img_n_instance).sum().float()
+            # total += embedding_q.size(0) *3
+            # acc += (torch.argmax(output_q, dim=1)==img_q_instance).sum().float()
+            # acc += (torch.argmax(output_p, dim=1)==img_p_instance).sum().float()
+            # acc += (torch.argmax(output_n, dim=1)==img_n_instance).sum().float()
+            acc += 0
+            total += 1
 
             acc_p_, acc_n_, total_p_, total_n_ = accuracy(embedding_q, embedding_p, embedding_n)
             acc_p += acc_p_
@@ -144,7 +155,7 @@ def train(opt):
             total_p += total_p_
             total_n += total_n_
             
-            loss = loss_1 + (loss_2_q + loss_2_p + loss_2_n) / 3
+            loss = loss_1# + (loss_2_q + loss_2_p + loss_2_n) / 3
             loss.backward()
             optimizer.step()
             epoch_loss.append(float(loss))
@@ -162,7 +173,7 @@ def train(opt):
             print('Saving models...')
             best_loss = total_loss
             torch.save(backbone.module.state_dict(), os.path.join(opt.saved_path, b_name+'.pth'))
-            torch.save(head.module.state_dict(), os.path.join(opt.saved_path, h_name+'.pth'))
+            # torch.save(head.module.state_dict(), os.path.join(opt.saved_path, h_name+'.pth'))
 
 if __name__ == "__main__":
     opt = get_args_arcface()

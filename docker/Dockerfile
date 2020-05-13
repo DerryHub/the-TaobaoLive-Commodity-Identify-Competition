@@ -8,7 +8,7 @@ ADD . /
 
 ## 指定默认工作目录为根目录（需要把run.sh和生成的结果文件都放在该文件夹下，提交后才能运行）
 WORKDIR /
-# RUN rm /var/lib/apt/lists/* -vf
+RUN rm /var/lib/apt/lists/* -vf
 RUN rm /etc/apt/sources.list.d/cuda.list
 RUN apt-get update
 RUN apt-get install -y libglib2.0-0

@@ -1,5 +1,6 @@
 import os
 import torch
+from torch.functional import F
 from torch.utils.data import DataLoader
 import numpy as np
 from arcface.resnet import ResNet
@@ -138,31 +139,42 @@ def evaluate(opt):
     vdo_features = np.zeros((0, opt.embedding_size))
     instances = []
 
+    sizes = [224, 112]
     print('Predecting...')
-    for d in tqdm(loader):
-        img = d['img'].cuda()
-        vdo = d['vdo'].cuda()
-        instances += d['instance']
-        img_text = d['img_text'].cuda()
-        vdo_text = d['vdo_text'].cuda()
-        img_e = d['img_e'].cuda()
-        vdo_e = d['vdo_e'].cuda()
-        with torch.no_grad():
-            img_f = model(img)
-            vdo_f = model(vdo)
+    for s in sizes:
+        for d in tqdm(loader):
+            img = d['img'].cuda()
+            vdo = d['vdo'].cuda()
+            if s != 224:
+                img = F.interpolate(img, size=(s,s), mode='bilinear', align_corners=False)
+                vdo = F.interpolate(vdo, size=(s,s), mode='bilinear', align_corners=False)
+            instances += d['instance']
+            img_text = d['img_text'].cuda()
+            vdo_text = d['vdo_text'].cuda()
+            img_e = d['img_e'].cuda()
+            vdo_e = d['vdo_e'].cuda()
+            with torch.no_grad():
+                img_f = model(img)
+                vdo_f = model(vdo)
 
-        img_f = img_f.cpu().numpy()
-        vdo_f = vdo_f.cpu().numpy()
+            img_f = img_f.cpu().numpy()
+            vdo_f = vdo_f.cpu().numpy()
 
-        img_features = np.append(img_features, img_f, axis=0)
-        vdo_features = np.append(vdo_features, vdo_f, axis=0)
+            img_features = np.append(img_features, img_f, axis=0)
+            vdo_features = np.append(vdo_features, vdo_f, axis=0)
 
     # with open('data/instance2label.json', 'r') as f:
     #     ins2labDic = json.load(f)
 
     print('Calculating cosine similarity...')
     cos = cosine_similarity(vdo_features, img_features)
-    return cos, instances
+    length = len(cos) // len(sizes)
+    coss = []
+    for i in range(length):
+        for j in range(length):
+            coss.append(cos[i*length:(i+1)*length, j*length:(j+1)*length])
+    cos = np.max(coss)
+    return cos, instances[:length]
 
     # rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
     # # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)

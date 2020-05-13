@@ -40,6 +40,62 @@ class Text2Num:
     for test
 '''
 
+# class TestImageDataset(Dataset):
+#     def __init__(self, root_dir='data', dir_list=['validation_dataset_part1', 'validation_dataset_part2'], transform=None, maxLen=64, PAD=0):
+#         self.root_dir = root_dir
+#         self.transform = transform
+#         self.mode = 'image'
+
+#         label_file = 'label.json'
+#         with open(label_file, 'r') as f:
+#             self.labelDic = json.load(f)
+
+#         self.num_classes = len(self.labelDic['label2index'])
+
+#         dirs = [os.path.join(root_dir, d) for d in dir_list]
+#         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
+#         self.vocab_size = text2num.vocab_size
+#         self.images = []
+#         self.ids = []
+#         self.frames = []
+#         self.textDic = {}
+        
+#         for di in dirs:
+#             img_dir_list = os.listdir(os.path.join(di, 'image'))
+#             for img_dir in img_dir_list:
+#                 img_names = os.listdir(os.path.join(di, 'image', img_dir))
+#                 for img_name in img_names:
+#                     self.images.append(os.path.join(di, 'image', img_dir, img_name))
+#                     self.frames.append(img_name.split('.')[0])
+#                     self.ids.append(img_dir)
+#                 textPath = os.path.join(di, 'image_text', img_dir+'.txt')
+#                 with open(textPath, 'r') as f:
+#                     self.textDic[img_dir] = text2num(f.readline())
+    
+#         # self.images = self.images[:100]
+
+#     def __len__(self):
+#         return len(self.images)
+
+#     def __getitem__(self, index):
+#         imgPath = self.images[index]
+#         img = cv2.imread(imgPath)
+#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#         img = img.astype(np.float32) / 255
+#         img_id = self.ids[index]
+#         text = self.textDic[img_id]
+#         text = torch.Tensor(text).long()
+#         sample = {'img': img, 'text': text}
+#         if self.transform:
+#             sample = self.transform(sample)
+#         return sample
+
+#     def getImageInfo(self, index):
+#         imgPath = self.images[index]
+#         img_id = self.ids[index]
+#         frame = self.frames[index]
+#         return imgPath, img_id, frame
+
 class TestImageDataset(Dataset):
     def __init__(self, root_dir, transform=None, maxLen=64, PAD=0):
         self.root_dir = root_dir
@@ -94,6 +150,76 @@ class TestImageDataset(Dataset):
         img_id = self.ids[index]
         frame = self.frames[index]
         return imgPath, img_id, frame
+
+# class TestVideoDataset(Dataset):
+#     def __init__(self, root_dir, transform=None, n=20, dir_list=['validation_dataset_part1', 'validation_dataset_part2'], maxLen=64, PAD=0):
+#         self.root_dir = root_dir
+#         self.transform = transform
+#         self.n = n
+#         self.mode = 'video'
+
+#         label_file = 'label.json'
+#         with open(label_file, 'r') as f:
+#             self.labelDic = json.load(f)
+
+#         self.num_classes = len(self.labelDic['label2index'])
+#         text2num = Text2Num(maxLen=maxLen, PAD=PAD)
+#         self.vocab_size = text2num.vocab_size
+#         dirs = [os.path.join(root_dir, d) for d in dir_list]
+
+#         # gap = 400 // n
+#         # self.frames_ids = [i*gap for i in range(n)]
+#         self.videos = []
+#         self.ids = []
+#         self.textDic = {}
+        
+#         for di in dirs:
+#             vdo_names = os.listdir(os.path.join(di, 'video'))
+#             for vdo_name in vdo_names:
+#                 self.videos.append(os.path.join(di, 'video', vdo_name))
+#                 self.ids.append(vdo_name.split('.')[0])
+#                 textPath = os.path.join(di, 'video_text', vdo_name.split('.')[0]+'.txt')
+#                 with open(textPath, 'r') as f:
+#                     self.textDic[vdo_name.split('.')[0]] = text2num(f.readline())
+                    
+#         # self.videos = self.videos[:10]
+
+#     def __len__(self):
+#         return len(self.videos)*self.n
+
+#     def __getitem__(self, index):
+#         v_index = index // self.n
+#         # f_index = self.frames_ids[index % self.n]
+#         vdo_name = self.videos[v_index]
+#         cap = cv2.VideoCapture(vdo_name)
+#         frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+#         f_index = int((frames // self.n) * (index % self.n))
+#         cap.set(cv2.CAP_PROP_POS_FRAMES, f_index)
+#         ret, img = cap.read()
+#         cap.release()
+
+#         vdo_id = self.ids[v_index]
+#         text = self.textDic[vdo_id]
+#         text = torch.Tensor(text).long()
+        
+#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#         img = img.astype(np.float32) / 255
+        
+#         sample = {'img': img, 'text': text}
+#         if self.transform:
+#             sample = self.transform(sample)
+#         return sample
+
+#     def getImageInfo(self, index):
+#         v_index = index // self.n
+#         # frame = self.frames_ids[index % self.n]
+#         vdoPath = self.videos[v_index]
+#         cap = cv2.VideoCapture(vdoPath)
+#         frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+#         frame = int((frames // self.n) * (index % self.n))
+#         cap.release()
+#         vdo_id = self.ids[v_index]
+#         return vdoPath, vdo_id, str(frame)
 
 
 class TestVideoDataset(Dataset):

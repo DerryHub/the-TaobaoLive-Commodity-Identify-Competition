@@ -37,7 +37,7 @@ def train(opt):
                         "drop_last": True,
                         "num_workers": opt.workers}
 
-    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
+    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="all", size=(opt.size, opt.size))
     # training_set = HardTripletDataset(
     #     root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)

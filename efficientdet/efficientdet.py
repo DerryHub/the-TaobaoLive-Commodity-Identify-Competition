@@ -8,6 +8,7 @@ from efficientdet.efficientnet import EfficientNet as EffNet
 from efficientdet.efficientnet_utils import MemoryEfficientSwish, Swish, Conv2dStaticSamePadding, MaxPool2dStaticSamePadding
 from efficientdet.utils import Anchors, BBoxTransform, ClipBoxes
 from efficientdet.loss import FocalLoss
+from efficientdet.flownet import FlowNetS
 
 
 
@@ -411,13 +412,13 @@ class Instance(nn.Module):
         self.bn_list = nn.ModuleList(
             [nn.ModuleList([nn.BatchNorm2d(in_channels, momentum=0.01, eps=1e-3) for i in range(num_layers)]) for j in
              range(5)])
-        self.header = SeparableConvBlock(in_channels*2, num_anchors, norm=False, activation=False)
+        self.header = SeparableConvBlock(in_channels*3, num_anchors, norm=False, activation=False)
         self.swish = MemoryEfficientSwish() if not onnx_export else Swish()
         self.sentvec = SentVec_TFIDF(embedding_size=in_channels, root_dir=root_dir)
 
-    def forward(self, inputs, text):
+    def forward(self, inputs, features_f, text):
         feats = []
-        for feat, bn_list in zip(inputs, self.bn_list):
+        for feat, feat_f,bn_list in zip(inputs, features_f, self.bn_list):
             for i, bn, conv in zip(range(self.num_layers), bn_list, self.conv_list):
                 feat = conv(feat)
                 feat = bn(feat)
@@ -426,7 +427,11 @@ class Instance(nn.Module):
             sent = self.sentvec(text)
             sent = sent.repeat(1, w*h).view(b, w*h, sent.size(1))
             sent = sent.permute(0, 2, 1).view(b, sent.size(2), w, h)
-            feat = torch.cat([feat, sent], dim=1)
+            
+            feat_f = feat_f.repeat(10, 1, 1, 1)
+
+            feat = torch.cat([feat, sent, feat_f], dim=1)
+
             feat = self.header(feat)
 
             feat = feat.permute(0, 2, 3, 1)
@@ -534,6 +539,15 @@ class EfficientDet(nn.Module):
 
         self.cost = FocalLoss()
 
+        # flow
+        self.flownet = FlowNetS(batchNorm=False)
+        self.bifpn_flow = nn.Sequential(
+            *[BiFPN(self.fpn_num_filters[self.compound_coef],
+                    [512, 512, 1024],
+                    True if _ == 0 else False,
+                    attention=True if compound_coef < 6 else False)
+              for _ in range(self.fpn_cell_repeats[compound_coef])])
+
     def freeze_bn(self):
         for m in self.modules():
             if isinstance(m, nn.BatchNorm2d):
@@ -551,13 +565,20 @@ class EfficientDet(nn.Module):
         max_size = imgs.shape[-1]
 
         _, p3, p4, p5 = self.backbone_net(imgs)
-
         features = (p3, p4, p5)
         features = self.bifpn(features)
+        bs = imgs.size(0)
+        assert bs%10 == 0
+        bs = bs // 10
+        imgs_f = torch.cat([imgs[10*i:10*(i+1)-1] - imgs[1+10*i:10*(i+1)] for i in range(bs)], dim=0).view(-1, 27, 512, 512)
+        # imgs_f = (imgs[:-1] - imgs[1:]).view(-1, 27, 512, 512)
+        p3_f, p4_f, p5_f = self.flownet(imgs_f)
+        features_f = (p3_f, p4_f, p5_f)
+        features_f = self.bifpn_flow(features_f)
 
         regression = self.regressor(features)
         classification = self.classifier(features)
-        instance = self.instance(features, text)
+        instance = self.instance(features, features_f, text)
         anchors = self.anchors(imgs, imgs.dtype)
         
         if self.training:

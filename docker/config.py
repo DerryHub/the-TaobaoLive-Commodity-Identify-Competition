@@ -13,7 +13,7 @@ def get_args_efficientdet():
                         help="Early stopping's parameter: minimum change loss to qualify as an improvement")
     parser.add_argument("--es_patience", type=int, default=0,
                         help="Early stopping's parameter: number of epochs with no improvement after which training will be stopped. Set to 0 to disable this technique.")
-    parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_3w", help="the root folder of dataset")
+    parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_fs", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=None)
     parser.add_argument('--network', default='efficientdet-d4', type=str,
@@ -28,7 +28,7 @@ def get_args_efficientdet():
     parser.add_argument('--instance_threshold_image', type=float, default=0.35)
     parser.add_argument('--instance_threshold_video', type=float, default=0.35)
     parser.add_argument('--prediction_dir', type=str, default="predictions/")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=48)
 
     parser.add_argument("--imgORvdo", type=str, default=None, help='[image, video]')
 
@@ -55,13 +55,13 @@ def get_args_arcface():
     parser.add_argument("--batch_size", type=int, default=512, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num_epochs", type=int, default=500)
-    parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_3w", help="the root folder of dataset")
+    parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_fs", help="the root folder of dataset")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     parser.add_argument("--num_classes", type=int, default=29522)
     parser.add_argument("--drop_ratio", type=float, default=0.1)
     parser.add_argument("--embedding_size", type=int, default=2048)
     parser.add_argument('--resume', type=bool, default=True)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=48)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
     parser.add_argument("--m", type=float, default=0.5)

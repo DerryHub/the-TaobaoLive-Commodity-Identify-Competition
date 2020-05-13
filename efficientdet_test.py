@@ -1,12 +1,13 @@
-from efficientdet.efficientdet import EfficientDet, Classifier, Instance
+from efficientdet.efficientdet import *
 from dataset import EfficientdetDataset
 from torch.utils.data import DataLoader
 from config import get_args_efficientdet
 from torchvision import transforms
 from utils import Resizer, Normalizer, Augmenter, collater, AdamW
 from efficientdet.loss import FocalLoss
+from efficientdet.flownet import FlowNetS
 import torch
-
+from torch import nn
 opt = get_args_efficientdet()
 
 # training_set = EfficientdetDataset(root_dir=opt.data_path, mode="train",
@@ -15,15 +16,22 @@ opt = get_args_efficientdet()
 #                                maxLen=opt.max_position_embeddings,
 #                                PAD=opt.PAD)
 
-# loader = DataLoader(training_set, num_workers=2, batch_size=2, collate_fn=collater)
-opt.num_classes = 90
+# loader = DataLoader(training_set, num_workers=2, batch_size=10, collate_fn=collater)
+opt.num_classes = 23
 net = EfficientDet(opt)
-net.load_state_dict(torch.load('trained_models/efficientdet-d4.pth'))
-net.classifier = Classifier(in_channels=224, num_anchors=9,
-                                     num_classes=23,
-                                     num_layers=4)
-net.instance = Instance(in_channels=224, num_anchors=9, num_layers=4)
-torch.save(net.state_dict(), 'trained_models/efficientdet-d4.pth')
+net.load_state_dict(torch.load('trained_models/efficientdet-d0_video_new.pth'))
+# net.classifier = Classifier(in_channels=224, num_anchors=9,
+#                                      num_classes=23,
+#                                      num_layers=4)
+# net.instance.header = SeparableConvBlock(64*3, 9, norm=False, activation=False)
+# net.flownet = FlowNetS(batchNorm=False)
+# net.bifpn_flow = nn.Sequential(
+#             *[BiFPN(64,
+#                     [512, 512, 1024],
+#                     True if _ == 0 else False,
+#                     attention=True)
+#               for _ in range(3)])
+# torch.save(net.state_dict(), 'trained_models/efficientdet-d0_video_new.pth')
 # net.cuda()
 # net.eval()
 # cost = FocalLoss()
@@ -32,6 +40,7 @@ torch.save(net.state_dict(), 'trained_models/efficientdet-d4.pth')
 #     img = d['img'].cuda().float()
 #     annot = d['annot'].cuda()
 #     text = d['text'].cuda()
-#     loss = net([img, text, annot])
-#     print(loss)
+#     print(img.size())
+#     b = net([img, text, annot])
+#     print(len(b))
 #     break

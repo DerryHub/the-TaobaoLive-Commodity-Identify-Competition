@@ -277,6 +277,110 @@ class EfficientdetDataset(Dataset):
         imgID, frame = imgName[:-4].split('_')
         return imgPath, imgID, frame
 
+class EfficientdetDatasetVideo(Dataset):
+    def __init__(self, root_dir='data', mode='train', imgORvdo='video', transform=None, maxLen=64, PAD=0):
+        assert mode in ['train', 'validation']
+        assert imgORvdo in ['video']
+
+        self.root_dir = root_dir
+        self.transform = transform
+        text2num = Text2Num(maxLen=maxLen, root_dir=root_dir, PAD=PAD)
+        self.vocab_size = text2num.vocab_size
+        label_file = 'label.json'
+        with open(os.path.join(root_dir, label_file), 'r') as f:
+            self.labelDic = json.load(f)
+
+        self.num_classes = len(self.labelDic['label2index'])
+
+        tats = [mode + '_videos']
+
+        self.textDic = {}
+        ds = []
+        for t in tats:
+            with open(os.path.join(root_dir, t+'_annotation.json'), 'r') as f:
+                ds.append(json.load(f))
+            with open(os.path.join(root_dir, t+'_text.json'), 'r') as f:
+                self.textDic[t] = json.load(f)
+
+        for k in self.textDic.keys():
+            for kk in self.textDic[k].keys():
+                self.textDic[k][kk] = text2num(self.textDic[k][kk])
+
+        ls = [d['annotations'] for d in ds]
+
+        self.images = []
+        
+        self.videos = {}
+        print('Loading {} {} data...'.format(mode, imgORvdo))
+        for i, l in enumerate(ls):
+            for d in l:
+                if d['img_name'][:6] not in self.videos:
+                    self.videos[d['img_name'][:6]] = []
+                # if len(d['annotations']) == 0:
+                #     continue
+                t = []
+                t.append(os.path.join(tats[i], d['img_name']))
+                t.append(d['annotations'])
+                t.append(d['img_name'])
+                t.append(tats[i])
+                self.videos[d['img_name'][:6]].append(t)
+                # self.images.append(t)
+        self.videos = list(self.videos.values())
+        for l in self.videos:
+            assert len(l) == 10
+        # print(len(self.images))
+        self.videos = self.videos[:100]
+        print('Done')
+
+    def __len__(self):
+        return len(self.videos)
+
+    def __getitem__(self, index):
+        lst = self.videos[index]
+        datas = []
+        for imgPath, annotationsList, imgName, t in lst:
+        # imgPath, annotationsList, imgName, t = self.images[index]
+            text_name = imgName.split('_')[0]
+            text = self.textDic[t][text_name]
+            text = torch.Tensor(text).long()
+
+            img = cv2.imread(os.path.join(self.root_dir, imgPath))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img.astype(np.float32) / 255
+
+            annotations = np.zeros((len(annotationsList), 6))
+            for i, annotationDic in enumerate(annotationsList):
+                annotation = np.zeros((1, 6))
+                annotation[0, :4] = annotationDic['box']
+                annotation[0, 4] = annotationDic['label']
+                if annotationDic['instance_id'] > 0:
+                    annotation[0, 5] = 1
+                else:
+                    annotation[0, 5] = 0
+                annotations[i:i+1, :] = annotation
+                # annotations = np.append(annotations, annotation, axis=0)
+                
+            sample = {'img': img, 'annot': annotations, 'text': text}
+            datas.append(sample)
+        if self.transform:
+            datas = self.transform(datas)
+        return datas
+
+    # def label2index(self, label):
+    #     return self.labelDic['label2index'][label]
+
+    # def index2label(self, index):
+    #     return self.labelDic['index2label'][str(index)]
+
+    # def getImagePath(self, index):
+    #     imgPath, annotationsList, imgName, t = self.images[index]
+    #     return imgPath
+
+    # def getImageInfo(self, index):
+    #     imgPath, annotationsList, imgName, t = self.images[index]
+    #     imgID, frame = imgName[:-4].split('_')
+    #     return imgPath, imgID, frame
+
 '''
     for arcface
 '''
@@ -1136,9 +1240,9 @@ class TestDataset(Dataset):
 if __name__ == "__main__":
     from config import get_args_arcface
     opt = get_args_arcface()
-    dataset = ITMatchTrain(opt)
+    dataset = EfficientdetDatasetVideo()
     print(len(dataset))
-    print(dataset[0]['feature'].size(), dataset[0]['text'])
+    # print(dataset[0])
     # from utils import collater_HardTriplet
     # from torch.utils.data import DataLoader
     # training_params = {"batch_size": 20,
