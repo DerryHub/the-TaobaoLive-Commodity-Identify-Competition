@@ -1,6 +1,7 @@
-from torch import nn
+from torch import nn, Tensor
 import torch
 import math
+import torch.nn.functional as F
 from arcface.utils import l2_norm
 
 class Arcface(nn.Module):
@@ -54,6 +55,88 @@ class Arcface(nn.Module):
             output[idx_, label] = cos_theta_m[idx_, label]
         output *= self.s # scale up in order to make softmax work, first introduced in normface
         return output
+
+class AdaCos(nn.Module):
+    def __init__(self, config):
+        super(AdaCos, self).__init__()
+        num_features = config.embedding_size
+        num_classes = config.num_classes
+        self.m = config.m
+        self.num_features = num_features
+        self.n_classes = num_classes
+        self.s = math.sqrt(2) * math.log(num_classes - 1)
+        self.kernel = nn.Parameter(torch.FloatTensor(num_classes, num_features))
+        nn.init.xavier_uniform_(self.kernel)
+
+    def forward(self, inputs):
+        if self.training:
+            input, label = inputs
+        else:
+            input = inputs
+            label = None
+        # normalize features
+        x = F.normalize(input)
+        # normalize weights
+        W = F.normalize(self.kernel)
+        # dot product
+        logits = F.linear(x, W)
+        if label is None:
+            return logits
+        # feature re-scale
+        theta = torch.acos(torch.clamp(logits, -1.0 + 1e-7, 1.0 - 1e-7))
+        one_hot = torch.zeros_like(logits)
+        one_hot.scatter_(1, label.view(-1, 1).long(), 1)
+        with torch.no_grad():
+            B_avg = torch.where(one_hot < 1, torch.exp(self.s * logits), torch.zeros_like(logits))
+            B_avg = torch.sum(B_avg) / input.size(0)
+            # print(B_avg)
+            theta_med = torch.median(theta[one_hot == 1])
+            self.s = torch.log(B_avg) / torch.cos(torch.min(math.pi/4 * torch.ones_like(theta_med), theta_med))
+        output = self.s * logits
+
+        return output
+
+class SparseCircleLoss(nn.Module):
+    def __init__(self, config) -> None:
+        super(SparseCircleLoss, self).__init__()
+        self.margin = config.m
+        self.gamma = config.s
+        self.soft_plus = nn.Softplus()
+        self.class_num = config.num_classes
+        self.emdsize = config.embedding_size
+
+        self.kernel = nn.Parameter(torch.FloatTensor(self.class_num, self.emdsize))
+        nn.init.xavier_uniform_(self.kernel)
+
+
+    def forward(self, inputs) -> Tensor:
+        input, label = inputs
+        similarity_matrix = nn.functional.linear(nn.functional.normalize(input,p=2, dim=1, eps=1e-12), nn.functional.normalize(self.kernel,p=2, dim=1, eps=1e-12))
+        
+        one_hot = torch.zeros(similarity_matrix.size(), device='cuda')
+        one_hot.scatter_(1, label.view(-1, 1).long(), 1)
+        one_hot = one_hot.type(dtype=torch.bool)
+        #sp = torch.gather(similarity_matrix, dim=1, index=label.unsqueeze(1))
+        sp = similarity_matrix[one_hot]
+        # mask = one_hot.logical_not()
+        mask = torch.logical_not(one_hot)
+        sn = similarity_matrix[mask]
+
+        sp = sp.view(input.size()[0], -1)
+        sn = sn.view(input.size()[0], -1)
+
+        ap = torch.clamp_min(-sp.detach() + 1 + self.margin, min=0.)
+        an = torch.clamp_min(sn.detach() + self.margin, min=0.)
+
+        delta_p = 1 - self.margin
+        delta_n = self.margin
+
+        logit_p = - ap * (sp - delta_p) * self.gamma
+        logit_n = an * (sn - delta_n) * self.gamma
+
+        loss = self.soft_plus(torch.logsumexp(logit_n, dim=1) + torch.logsumexp(logit_p, dim=1))
+
+        return loss.mean(), similarity_matrix
 
 class LinearLayer(nn.Module):
     def __init__(self, config):

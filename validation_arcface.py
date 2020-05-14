@@ -131,9 +131,10 @@ def evaluate(opt):
     elif 'efficientnet' in opt.network:
         model = EfficientNet(opt)
         b_name = opt.network
-        h_name = 'arcface_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
+
+    print(b_name)
 
     model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
     model.cuda()

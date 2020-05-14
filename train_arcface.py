@@ -14,7 +14,7 @@ from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
 from arcface.iresnet import iResNet
 from arcface.efficientnet import EfficientNet
-from arcface.head import Arcface, LinearLayer
+from arcface.head import Arcface, LinearLayer, AdaCos, SparseCircleLoss
 from dataset import ArcfaceDataset, HardTripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
@@ -51,47 +51,57 @@ def train(opt):
     # opt.num_labels = training_set.num_labels
     # opt.vocab_size = training_set.vocab_size
     # print(opt.num_classes, opt.vocab_size)
+    af = opt.head
+    if af == 'arcface':
+        head = Arcface(opt)
+    elif af == 'adacos':
+        head = AdaCos(opt)
+    elif af == 'circleloss':
+        head = SparseCircleLoss(opt)
+    else:
+        raise RuntimeError('Cannot Find the Head: {}'.format(opt.head))
 
     if opt.network == 'resnet':
         backbone = ResNet(opt)
         b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers_r)
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'googlenet':
         backbone = GoogLeNet(opt)
         b_name = opt.network
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'inceptionv4':
         backbone = InceptionV4(opt)
         b_name = opt.network
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'inceptionresnetv2':
         backbone = InceptionResNetV2(opt)
         b_name = opt.network
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'densenet':
         backbone = DenseNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'resnet_cbam':
         backbone = ResNetCBAM(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_c)
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'resnest':
         backbone = ResNeSt(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_s)
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif opt.network == 'iresnet':
         backbone = iResNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_i)
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     elif 'efficientnet' in opt.network:
         backbone = EfficientNet(opt)
         b_name = opt.network
-        h_name = 'arcface_'+b_name
+        h_name = af+'_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
-    head = Arcface(opt)
+    # head = Arcface(opt)
+    # head = AdaCos(opt)
     # linear = LinearLayer(opt)
     # l_name = 'linear'
 
@@ -167,7 +177,11 @@ def train(opt):
 
             # print(torch.sum(cos, dim=1))
 
-            output = head([embedding, instance])
+            if opt.head == 'circleloss':
+                loss, output = head([embedding, instance])
+            else:
+                output = head([embedding, instance])
+                loss = cost(output, instance)
             # output_2 = head([embedding_2, instance])
             # label_output = linear(embedding)
 
@@ -177,7 +191,7 @@ def train(opt):
             # acc_label += (torch.argmax(label_output, dim=1)==label).sum().float()
 
             # loss = (cost(output_1, instance) + cost(output_2, instance))/2
-            loss = cost(output, instance)
+            
             # loss_2 = cost(output_2, instance)
             # loss_label = cost(label_output, label)
             # loss_head = torch.sum(torch.sum(l2_norm(head.module.kernel, axis=0), dim=1)**2)
