@@ -53,7 +53,7 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=224, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=20, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=128, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
@@ -63,22 +63,26 @@ def get_args_arcface():
     parser.add_argument("--drop_ratio", type=float, default=0.1)
     parser.add_argument("--embedding_size", type=int, default=2048)
     parser.add_argument('--resume', type=bool, default=True)
-    parser.add_argument("--workers", type=int, default=24)
+    parser.add_argument("--workers", type=int, default=96)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.1)
+    parser.add_argument("--m", type=float, default=0.5)
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
     parser.add_argument('--threshold', type=float, default=0.8)
-    parser.add_argument("--GPUs", type=list, default=[0])
+    parser.add_argument("--GPUs", type=list, default=[0, 1])
     parser.add_argument("--n_samples", type=int, default=4)
     parser.add_argument("--network_text", type=str, default='textcnn', help="[bert, tf_idf, textcnn]")
-    parser.add_argument("--network", type=str, default='resnest', 
-                        help="[iresnet, resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, densenet, resnet_cbam, efficientnet-b[0~8]]")
-    parser.add_argument("--head", type=str, default='adacos', help="[arcface, adacos, circleloss]")
+    parser.add_argument("--network", type=str, default='resnest_cbam', 
+                        help="[resnest_cbam, iresnet, resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, densenet, resnet_cbam, efficientnet-b[0~8]]")
+    parser.add_argument("--head", type=str, default='arcface', help="[arcface, adacos, circleloss]")
 
     parser.add_argument("--validation_config", type=list,
                         default=[('resnest', 224, 50, 1)])
+
+    # resnest cbam config
+    parser.add_argument("--num_layers_sc", type=int, default=50, help="[50, 101]")
+    
     # iresnet config
     parser.add_argument("--num_layers_i", type=int, default=50, help="[50, 101, 152]")
 

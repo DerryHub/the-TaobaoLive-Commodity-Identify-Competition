@@ -12,6 +12,7 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
+from arcface.resnest_cbam import ResNeStCBAM
 from arcface.iresnet import iResNet
 from arcface.efficientnet import EfficientNet
 from arcface.head import Arcface, LinearLayer, AdaCos, SparseCircleLoss
@@ -24,6 +25,7 @@ import numpy as np
 from utils import separate_bn_paras, collater_HardTriplet
 
 def train(opt):
+    torch.multiprocessing.set_sharing_strategy('file_system')
     print(opt)
     gpus = list(map(str, opt.GPUs))
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(gpus)
@@ -92,6 +94,10 @@ def train(opt):
     elif opt.network == 'iresnet':
         backbone = iResNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_i)
+        h_name = af+'_'+b_name
+    elif opt.network == 'resnest_cbam':
+        backbone = ResNeStCBAM(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_sc)
         h_name = af+'_'+b_name
     elif 'efficientnet' in opt.network:
         backbone = EfficientNet(opt)

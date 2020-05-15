@@ -10,47 +10,51 @@ from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
+from arcface.resnest_cbam import ResNeStCBAM
 from arcface.iresnet import iResNet
 from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
-from sklearn.metrics.pairwise import cosine_similarity
-from joint_bayesian.JointBayesian import verify
-import joblib
+# from sklearn.metrics.pairwise import cosine_similarity
+# from joint_bayesian.JointBayesian import verify
+# import joblib
 import json
 
-def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
-    print('Classifying with k-means...')
-    kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
-    vdo_cls = kmeans.predict(vdo_features)
-    img_cls = kmeans.predict(img_features)
+def cosine_similarity(a, b):
+    return a@b.T
 
-    vdo_cls = np.array(vdo_cls)
-    img_cls = np.array(img_cls)
+# def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
+#     print('Classifying with k-means...')
+#     kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
+#     vdo_cls = kmeans.predict(vdo_features)
+#     img_cls = kmeans.predict(img_features)
 
-    acc = 0
-    miss = 0
-    rates_t = []
-    rates_f = []
-    for i, vc in enumerate(tqdm(vdo_cls)):
-        l = []
-        arg = np.argwhere(img_cls==vc).reshape(-1)
-        for j in arg:
-            if ins2labDic[instances[i]] == ins2labDic[instances[j]]:
-                similarity = vdo_features[i]@img_features[j].T
-                l.append([j, similarity])
-        if len(l) == 0:
-            miss += 1
-            continue
-        m = max(l, key=lambda x: x[1])
-        if m[0] == i:
-            acc += 1
-            rates_t.append(m[1])
-        else:
-            rates_f.append(m[1])
-    print(miss/len(vdo_cls))
-    return rates_t, rates_f, acc/len(vdo_cls)
+#     vdo_cls = np.array(vdo_cls)
+#     img_cls = np.array(img_cls)
+
+#     acc = 0
+#     miss = 0
+#     rates_t = []
+#     rates_f = []
+#     for i, vc in enumerate(tqdm(vdo_cls)):
+#         l = []
+#         arg = np.argwhere(img_cls==vc).reshape(-1)
+#         for j in arg:
+#             if ins2labDic[instances[i]] == ins2labDic[instances[j]]:
+#                 similarity = vdo_features[i]@img_features[j].T
+#                 l.append([j, similarity])
+#         if len(l) == 0:
+#             miss += 1
+#             continue
+#         m = max(l, key=lambda x: x[1])
+#         if m[0] == i:
+#             acc += 1
+#             rates_t.append(m[1])
+#         else:
+#             rates_f.append(m[1])
+#     print(miss/len(vdo_cls))
+#     return rates_t, rates_f, acc/len(vdo_cls)
 
 
 def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
@@ -76,28 +80,28 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
             break
     return rates_t, rates_f, acc/len(cos)
 
-def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
-    print('Calculating Joint Bayesian...')
-    G = np.load(os.path.join(opt.saved_path, 'G.npy'))
-    A = np.load(os.path.join(opt.saved_path, 'A.npy'))
+# def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
+#     print('Calculating Joint Bayesian...')
+#     G = np.load(os.path.join(opt.saved_path, 'G.npy'))
+#     A = np.load(os.path.join(opt.saved_path, 'A.npy'))
 
-    scores = verify(A, G, vdo_features, img_features)
+#     scores = verify(A, G, vdo_features, img_features)
 
-    argmax = np.argsort(-scores, axis=1)
-    acc = 0
-    rates_t = []
-    rates_f = []
-    for i in tqdm(range(len(scores))):
-        for j in argmax[i]:
-            if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
-                continue
-            if j == i:
-                acc +=1
-                rates_t.append(scores[i, j])
-            else:
-                rates_f.append(scores[i, j])
-            break
-    return rates_t, rates_f, acc/len(scores)
+#     argmax = np.argsort(-scores, axis=1)
+#     acc = 0
+#     rates_t = []
+#     rates_f = []
+#     for i in tqdm(range(len(scores))):
+#         for j in argmax[i]:
+#             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
+#                 continue
+#             if j == i:
+#                 acc +=1
+#                 rates_t.append(scores[i, j])
+#             else:
+#                 rates_f.append(scores[i, j])
+#             break
+#     return rates_t, rates_f, acc/len(scores)
 
 
 def evaluate(opt):
@@ -128,6 +132,9 @@ def evaluate(opt):
     elif opt.network == 'iresnet':
         model = iResNet(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_i)
+    elif opt.network == 'resnest_cbam':
+        model = ResNeStCBAM(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_sc)
     elif 'efficientnet' in opt.network:
         model = EfficientNet(opt)
         b_name = opt.network
@@ -195,12 +202,13 @@ def evaluate(opt):
 
 if __name__ == "__main__":
     opt = get_args_arcface()
-    opt.batch_size *= 4
+    opt.batch_size *= 1
     config_list = opt.validation_config
     cos = 0
     for network, size, num_layers, r in config_list:
         opt.network = network
         opt.size = size
+        opt.num_layers_sc = num_layers
         opt.num_layers_i = num_layers
         opt.num_layers_c = num_layers
         opt.num_layers_r = num_layers

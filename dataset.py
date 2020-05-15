@@ -917,14 +917,14 @@ class ValidationArcfaceDataset(Dataset):
         vdo_text = self.textDic_v[textName_vdo]
         img_text = torch.Tensor(img_text).long()
         vdo_text = torch.Tensor(vdo_text).long()
-        # img = np.load(os.path.join(self.root_dir, imgPath))
-        # vdo = np.load(os.path.join(self.root_dir, vdoPath))
-        img = cv2.imread(os.path.join(self.root_dir, imgPath))
-        vdo = cv2.imread(os.path.join(self.root_dir, vdoPath))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img.astype(np.float32) / 255
-        vdo = cv2.cvtColor(vdo, cv2.COLOR_BGR2RGB)
-        vdo = vdo.astype(np.float32) / 255
+        img = np.load(os.path.join(self.root_dir, imgPath))
+        vdo = np.load(os.path.join(self.root_dir, vdoPath))
+        # img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        # vdo = cv2.imread(os.path.join(self.root_dir, vdoPath))
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = img.astype(np.float32) / 255
+        # vdo = cv2.cvtColor(vdo, cv2.COLOR_BGR2RGB)
+        # vdo = vdo.astype(np.float32) / 255
         
         hi, wi, ci = img.shape
         hv, wv, cv = vdo.shape

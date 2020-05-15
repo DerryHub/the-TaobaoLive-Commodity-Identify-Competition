@@ -12,6 +12,9 @@ class Arcface(nn.Module):
         num_classes = config.num_classes
         s = config.s
         m = config.m
+        # m1 = config.m1
+        # m2 = config.m2
+        # m3 = config.m3
 
         self.num_classes = num_classes
         self.kernel = nn.Parameter(torch.Tensor(embedding_size, num_classes))
