@@ -18,6 +18,8 @@ calIOU = False
 calPR = True
 calAREA = None
 
+C = np.array([0, 1, 2, 3, 3, 2, 3, 2, 3, 3, 4, 0, 2, 2, 2, 2, 0, 1, 0, 2, 3, 3, 2])
+
 def test(opt):
     opt.resume = True
     test_set = EfficientdetDataset(opt.data_path, mode='validation', transform=transforms.Compose([Normalizer(), Resizer()]), imgORvdo=opt.imgORvdo)
@@ -125,7 +127,7 @@ def test(opt):
                         s = iou(pre[6:10].unsqueeze(0), gt[:4].unsqueeze(0))
                         if s > 0.5:
                             N_TP_iou += 1
-                            if gt[4] in pre[1:6]:
+                            if C[int(gt[4])] in C[list(map(int, pre[1:3]))]:
                                 N_TP += 1
                             # if len(cat) != 1:
                             if gt[5] == pre[10] and gt[5] == 1:
@@ -184,3 +186,9 @@ def test(opt):
 if __name__ == "__main__":
     opt = get_args_efficientdet()
     test(opt)
+    # import json
+    # with open('data/label.json', 'r') as f:
+    #     d = json.load(f)
+    # print(d['index2label'])
+    # C = [0, 1, 2, 3, 3, 2, 3, 2, 3, 3, 4, 0, 2, 2, 2, 2, 0, 1, 0, 2, 3, 3, 2]
+    # print(len(C))

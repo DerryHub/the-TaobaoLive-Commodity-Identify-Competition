@@ -11,7 +11,7 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
-from arcface.resnest import ResNeSt
+from arcface.resnest import ResNeSt, PreModule
 from arcface.efficientnet import EfficientNet
 from arcface.head import Arcface, LinearLayer
 from dataset import ArcfaceDatasetSeparate
@@ -63,19 +63,17 @@ def train(opt):
         b_name = opt.network+'_{}'.format(opt.num_layers_d)
         h_name = 'arcface_'+b_name
     elif opt.network == 'resnet_cbam':
-        backbone_image = ResNetCBAM(opt)
-        backbone_video = ResNetCBAM(opt)
+        backbone = ResNetCBAM(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_c)
         h_name = 'arcface_'+b_name
-        b_name_image = b_name + '_image'
-        b_name_video = b_name + '_video'
     elif opt.network == 'resnest':
-        backbone_image = ResNeSt(opt)
-        backbone_video = ResNeSt(opt)
+        backbone = ResNeSt(opt)
+        pre_module_image = PreModule(opt)
+        pre_module_video = PreModule(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_s)
         h_name = 'arcface_'+b_name
-        b_name_image = b_name + '_image'
-        b_name_video = b_name + '_video'
+        p_name_image = 'pre_'+b_name+'_image'
+        p_name_video = 'pre_'+b_name+'_video'
     elif 'efficientnet' in opt.network:
         backbone = EfficientNet(opt)
         b_name = opt.network
@@ -85,14 +83,16 @@ def train(opt):
 
     head = Arcface(opt)
 
-    print('backbone_image: {}'.format(b_name_image))
-    print('backbone_video: {}'.format(b_name_video))
+    print('pre backbone image: {}'.format(p_name_image))
+    print('pre backbone video: {}'.format(p_name_video))
+    print('backbone: {}'.format(b_name))
     print('head: {}'.format(h_name))
 
     if opt.resume:
         print('Loading Backbone Model...')
-        backbone_image.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name_image+'.pth')))
-        backbone_video.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name_video+'.pth')))
+        pre_module_image.load_state_dict(torch.load(os.path.join(opt.saved_path, p_name_image+'.pth')))
+        pre_module_video.load_state_dict(torch.load(os.path.join(opt.saved_path, p_name_video+'.pth')))
+        backbone.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
         if os.path.isfile(os.path.join(opt.saved_path, h_name+'.pth')):
             print('Loading Head Model...')
             head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
@@ -100,23 +100,27 @@ def train(opt):
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
     
-    paras_only_bn_image, paras_wo_bn_image = separate_bn_paras(backbone_image)
-    paras_only_bn_video, paras_wo_bn_video = separate_bn_paras(backbone_video)
+    paras_only_bn, paras_wo_bn = separate_bn_paras(backbone)
 
     device = torch.device("cuda:{}".format(device_ids[0]))
 
-    backbone_image.to(device)
-    backbone_image = nn.DataParallel(backbone_image, device_ids=device_ids)
+    pre_module_image.to(device)
+    pre_module_image = nn.DataParallel(pre_module_image, device_ids=device_ids)
 
-    backbone_video.to(device)
-    backbone_video = nn.DataParallel(backbone_video, device_ids=device_ids)
+    pre_module_video.to(device)
+    pre_module_video = nn.DataParallel(pre_module_video, device_ids=device_ids)
+
+    backbone.to(device)
+    backbone = nn.DataParallel(backbone, device_ids=device_ids)
 
     head.to(device)
     head = nn.DataParallel(head, device_ids=device_ids)
 
     optimizer = AdamW([
-                {'params': paras_wo_bn_image + [head.module.kernel] + paras_wo_bn_video, 'weight_decay': 5e-4},
-                {'params': paras_only_bn_image + paras_only_bn_video}
+                {'params': paras_wo_bn + [head.module.kernel], 'weight_decay': 5e-4},
+                {'params': paras_only_bn},
+                {'params': pre_module_image.parameters()},
+                {'params': pre_module_video.parameters()}
             ], opt.lr)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, verbose=True)
@@ -129,8 +133,9 @@ def train(opt):
     num_iter_per_epoch = len(training_generator)
     for epoch in range(opt.num_epochs):
         print('Epoch: {}/{}:'.format(epoch + 1, opt.num_epochs))
-        backbone_image.train()
-        backbone_video.train()
+        pre_module_image.train()
+        pre_module_video.train()
+        backbone.train()
         head.train()
         epoch_loss = []
         progress_bar = tqdm(training_generator)
@@ -143,20 +148,24 @@ def train(opt):
             img = data['img'].cuda()
             vdo = data['vdo'].cuda()
             instance = data['instance'].cuda()
+            # print(img.size(), vdo.size())
+            img = pre_module_image(img)
+            vdo = pre_module_video(vdo)
+            # print(img.size(), vdo.size())
+            inp = torch.cat([img, vdo], dim=0)
+            instance = torch.cat([instance, instance], dim=0)
+            # print(inp.size())
+            embedding = backbone(inp)
 
-            embedding_image = backbone_image(img)
-            embedding_video = backbone_video(vdo)
+            output = head([embedding, instance])
 
-            output_image = head([embedding_image, instance])
-            output_video = head([embedding_video, instance])
-
-            total += instance.size(0)*2
-            acc += (torch.argmax(output_image, dim=1)==instance).sum().float()
-            acc += (torch.argmax(output_video, dim=1)==instance).sum().float()
+            total += instance.size(0)
+            acc += (torch.argmax(output, dim=1)==instance).sum().float()
             # acc_label += (torch.argmax(label_output, dim=1)==label).sum().float()
 
-            loss_mse = cost_mse(embedding_image, embedding_video)
-            loss = (cost(output_image, instance) + cost(output_video, instance))/2 + loss_mse
+            # loss_mse = cost_mse(embedding_image, embedding_video)
+            # loss = (cost(output_image, instance) + cost(output_video, instance))/2 + loss_mse
+            loss = cost(output, instance)
 
             loss_head = 0
             loss_all = loss
@@ -176,8 +185,9 @@ def train(opt):
         if total_loss < best_loss:
             print('Saving models...')
             best_loss = total_loss
-            torch.save(backbone_image.module.state_dict(), os.path.join(opt.saved_path, b_name_image+'.pth'))
-            torch.save(backbone_video.module.state_dict(), os.path.join(opt.saved_path, b_name_video+'.pth'))
+            torch.save(pre_module_image.module.state_dict(), os.path.join(opt.saved_path, p_name_image+'.pth'))
+            torch.save(pre_module_video.module.state_dict(), os.path.join(opt.saved_path, p_name_video+'.pth'))
+            torch.save(backbone.module.state_dict(), os.path.join(opt.saved_path, b_name+'.pth'))
             torch.save(head.module.state_dict(), os.path.join(opt.saved_path, h_name+'.pth'))
             # torch.save(linear.module.state_dict(), os.path.join(opt.saved_path, l_name+'.pth'))
 

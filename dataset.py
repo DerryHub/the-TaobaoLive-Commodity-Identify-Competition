@@ -15,6 +15,8 @@ import cv2
 import random
 import jieba
 
+from autoaugment import rand_augment_transform
+from PIL import Image
 '''
     for image-text match
 '''
@@ -390,6 +392,14 @@ class ArcfaceDataset(Dataset):
         assert mode in ['train', 'all']
         assert imgORvdo in ['all', 'image', 'video']
 
+        mean=[0.55574415, 0.51230767, 0.51123354]
+        aa_params = dict(
+            translate_const=int(size[0] * 0.40),
+            img_mean=tuple([min(255, round(255 * x)) for x in mean]),
+        )
+        self.randAug = rand_augment_transform('rand-m9-n3-mstd0.5', aa_params)
+
+
         self.root_dir = root_dir
         self.size = size
         self.flip_x = flip_x
@@ -398,7 +408,7 @@ class ArcfaceDataset(Dataset):
             modes = ['train']
             instanceFile = 'instanceID.json'
         else:
-            modes = ['train', 'validation']
+            modes = ['train', 'validation_2']
             instanceFile = 'instanceID_all.json'
 
         with open(os.path.join(root_dir, instanceFile), 'r') as f:
@@ -467,22 +477,45 @@ class ArcfaceDataset(Dataset):
     def __getitem__(self, index):
         imgName, instance_id, textName, iORv, mode = self.images[index]
         img = np.load(imgName[:-4]+'.npy')
+        # img = cv2.imread(imgName[:-4]+'.jpg')
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # img = img.astype(np.float32) / 255
+
+        # '''randAug'''
+        # img = Image.fromarray(np.uint8(img*255))
+        # img = self.randAug(img)
+        # img.save('aaa.jpg')
+        # img = np.array(img)
+        # img = img.astype(np.float32) / 255
+        # '''randAug'''
+
         text = self.textDics[mode][iORv][textName]
         
         text = torch.tensor(text).long()
         iORv = torch.tensor(iORv).long()
         
         h, w, c = img.shape
-        
-        rh_1 = random.randint(0, h-224)
-        rh_2 = random.randint(224, h)
-        rw_1 = random.randint(0, w-224)
-        rw_2 = random.randint(224, w)
+        # print(h,w,c)
+        rh = random.randint(0, h-256)
+        rw = random.randint(0, w-256)
 
-        img = img[rh_1:rh_2, rw_1:rw_2, :]
-        
+        img = img[rh:256+rh, rw:256+rw, :]
+
         img = cv2.resize(img, self.size)
 
+        '''random erasing'''
+        if np.random.rand() < 0.5:
+            w = h = 256
+            while w >= 256 or h >= 256:
+                r = np.random.uniform(0.3, 1/0.3)
+                s = 256*256*np.random.uniform(0.02, 0.4)
+                w = int(np.sqrt(s*r))
+                h = int(np.sqrt(s/r))
+            s_w = random.randint(0, 256-w)
+            s_h = random.randint(0, 256-h)
+            img[s_h:s_h+h, s_w:s_w+w, :] = 0
+        
+        # print(img.shape)
         instance = torch.tensor(self.clsDic[str(instance_id)])
         label = torch.tensor(self.instance2label[str(instance_id)])
 
@@ -759,49 +792,64 @@ class TripletDataset(Dataset):
 
 class HardTripletDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, n_samples=4):
-        assert mode in ['train']
+        assert mode in ['train', 'all']
+
+        mean=[0.55574415, 0.51230767, 0.51123354]
+        aa_params = dict(
+            translate_const=int(size[0] * 0.40),
+            img_mean=tuple([min(255, round(255 * x)) for x in mean]),
+        )
+        self.randAug = rand_augment_transform('rand-m9-n3-mstd0.5', aa_params)
 
         self.root_dir = root_dir
         self.size = size
         self.flip_x = flip_x
         self.n_samples = n_samples
 
-        img_tat = mode + '_images'
-        vdo_tat = mode + '_videos'
-        savePath = mode + '_instance'
-        self.savePath = os.path.join(root_dir, savePath)
+        if mode == 'train':
+            modes = ['train']
+            instanceFile = 'instanceID.json'
+        else:
+            modes = ['train', 'validation_2']
+            instanceFile = 'instanceID_all.json'
 
-        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
-            d_i = json.load(f)
-        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
-            d_v = json.load(f)
-
-        with open(os.path.join(root_dir, 'instanceID.json'), 'r') as f:
+        with open(os.path.join(root_dir, instanceFile), 'r') as f:
             self.clsDic = json.load(f)
-
-        l_i = d_i['annotations']
-        l_v = d_v['annotations']
 
         self.samples = {}
 
-        print('Loading data...')
-        for d in l_i:
-            for dd in d['annotations']:
-                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                    instance = self.clsDic[str(dd['instance_id'])]
-                    if instance not in self.samples:
-                        self.samples[instance] = []
-                    self.samples[instance].append(
-                        os.path.join(str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
-                    
-        for d in l_v:
-            for dd in d['annotations']:
-                if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
-                    instance = self.clsDic[str(dd['instance_id'])]
-                    if instance not in self.samples:
-                        self.samples[instance] = []
-                    self.samples[instance].append(
-                        os.path.join(str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
+        for mode in modes:
+            img_tat = mode + '_images'
+            vdo_tat = mode + '_videos'
+            savePath = mode + '_instance'
+            savePath = os.path.join(root_dir, savePath)
+
+            with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+                d_i = json.load(f)
+            with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+                d_v = json.load(f)
+
+            l_i = d_i['annotations']
+            l_v = d_v['annotations']
+
+            print('Loading data...')
+            for d in l_i:
+                for dd in d['annotations']:
+                    if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                        instance = self.clsDic[str(dd['instance_id'])]
+                        if instance not in self.samples:
+                            self.samples[instance] = []
+                        self.samples[instance].append(
+                            os.path.join(savePath, str(dd['instance_id']), img_tat+str(dd['instance_id'])+d['img_name']))
+                        
+            for d in l_v:
+                for dd in d['annotations']:
+                    if dd['instance_id'] > 0 and str(dd['instance_id']) in self.clsDic.keys():
+                        instance = self.clsDic[str(dd['instance_id'])]
+                        if instance not in self.samples:
+                            self.samples[instance] = []
+                        self.samples[instance].append(
+                            os.path.join(savePath, str(dd['instance_id']), vdo_tat+str(dd['instance_id'])+d['img_name']))
 
         self.num_classes = len(self.clsDic)
         
@@ -825,16 +873,35 @@ class HardTripletDataset(Dataset):
         imgs = []
         instances = []
         for imgPath in imgPaths:
-            img = np.load(os.path.join(self.savePath, imgPath)[:-4]+'.npy')
-            if self.size[0] != 224:
-                r = 224 // self.size[0]
-                img = cv2.resize(img, (256//r,256//r))
+            img = np.load(imgPath[:-4]+'.npy')
+            # '''randAug'''
+            # img = Image.fromarray(np.uint8(img*255))
+            # img = self.randAug(img)
+            # img.save('aaa.jpg')
+            # img = np.array(img)
+            # img = img.astype(np.float32) / 255
+            # '''randAug'''
+            # assert self.size[0] == 256
+            if self.size[0] != 256:
+                r = 256 / self.size[0]
+                img = cv2.resize(img, (int(270/r), int(270/r)))
             h, w, c = img.shape
 
             rh = random.randint(0, h-self.size[0])
             rw = random.randint(0, w-self.size[1])
 
             img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
+
+            if np.random.rand() < 0.5:
+                w = h = 256
+                while w >= 256 or h >= 256:
+                    r = np.random.uniform(0.3, 1/0.3)
+                    s = 256*256*np.random.uniform(0.02, 0.4)
+                    w = int(np.sqrt(s*r))
+                    h = int(np.sqrt(s/r))
+                s_w = random.randint(0, 256-w)
+                s_h = random.randint(0, 256-h)
+                img[s_h:s_h+h, s_w:s_w+w, :] = 0
 
             instance_t = torch.tensor(instance)
 
@@ -929,8 +996,8 @@ class ValidationArcfaceDataset(Dataset):
         hi, wi, ci = img.shape
         hv, wv, cv = vdo.shape
 
-        if self.size[0] != 224:
-            r = 224 / self.size[0]
+        if self.size[0] != 256:
+            r = 256 / self.size[0]
             img = cv2.resize(img, (int(hi/r), int(wi/r)))
             vdo = cv2.resize(vdo, (int(hv/r), int(wv/r)))
 
@@ -1240,9 +1307,9 @@ class TestDataset(Dataset):
 if __name__ == "__main__":
     from config import get_args_arcface
     opt = get_args_arcface()
-    dataset = EfficientdetDatasetVideo()
-    print(len(dataset))
-    # print(dataset[0])
+    dataset = ArcfaceDataset()
+    # print(len(dataset))
+    print(dataset[0])
     # from utils import collater_HardTriplet
     # from torch.utils.data import DataLoader
     # training_params = {"batch_size": 20,

@@ -158,7 +158,7 @@ class ResNetCBAM(nn.Module):
         layers = model_dic['layers']
         # embedding_size = 2048
         # drop_ratio = 0.1
-        # layers = [3, 4, 6, 3]
+        # layers = [3, 4, 23, 3]
 
         # self.sentvec = SentVec_TFIDF(embedding_size=embedding_size, root_dir='data/')
         block = Bottleneck
@@ -176,12 +176,15 @@ class ResNetCBAM(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # self.fc = nn.Linear(512* block.expansion, 1000)
 
-        self.output_layer = nn.Sequential(
-                                    nn.BatchNorm2d(512 * block.expansion),
-                                    nn.Dropout(drop_ratio),
-                                    Flatten(),
-                                    nn.Linear(512 * block.expansion, embedding_size),
-                                    nn.BatchNorm1d(embedding_size))
+        self.bn_last = nn.BatchNorm1d(embedding_size)
+        self.bn_last.bias.requires_grad_(False)
+
+        # self.output_layer = nn.Sequential(
+        #                             nn.BatchNorm2d(512 * block.expansion),
+        #                             nn.Dropout(drop_ratio),
+        #                             Flatten(),
+        #                             nn.Linear(512 * block.expansion, embedding_size),
+        #                             nn.BatchNorm1d(embedding_size))
 
         # self.last_layer = nn.Sequential(
         #     nn.Linear(2*embedding_size, embedding_size),
@@ -237,15 +240,23 @@ class ResNetCBAM(nn.Module):
         # print(x.size())
 
         x = self.avgpool(x)
-        x = self.output_layer(x)
+        # x = self.output_layer(x)
         # sent = self.sentvec(text)
         # x = torch.cat((x, sent), dim=1)
         # x = self.last_layer(x)
-        return l2_norm(x)
+        x = torch.flatten(x, 1)
+        
+        if self.training:
+            return x, self.bn_last(x)
+        else:
+            return l2_norm(self.bn_last(x))
+
 
 if __name__ == "__main__":
     net = ResNetCBAM('aa')
-    # net.load_state_dict(torch.load('trained_models/resnet50-19c8e357.pth'))
+    net.load_state_dict(torch.load('trained_models/resnet_cbam_101.pth'))
+    # del net.output_layer
+    # net.bn_last = nn.BatchNorm1d(2048)
     # l = [3, 4, 6, 3]
     # for i in range(3):
     #     net.layer1[i].ca = ChannelAttention(64 * 4)
@@ -269,7 +280,7 @@ if __name__ == "__main__":
     #                             nn.BatchNorm1d(4096))
                                 
     # del net.fc
-    # torch.save(net.state_dict(), 'trained_models/resnet_cbam_50.pth')
+    torch.save(net.state_dict(), 'trained_models/resnet_cbam_101.pth')
     a = torch.randn(5,3,224,224)
     b = net(a)
-    print(b.size())
+    print(b[0].size())

@@ -114,7 +114,7 @@ def processTrain(label):
         json.dump(label, f)
 
 def processValidation(label):
-    roots = [1, 2]
+    roots = [1, 2, 3, 4]
     img_tat = 'data/validation_images'
     vdo_tat = 'data/validation_videos' 
 
@@ -198,6 +198,7 @@ def saveNumpyInstance(root_dir, mode, size):
         box[2] = min(w, box[2]+dw)
         img = img[box[1]:box[3], box[0]:box[2], :]
         img = cv2.resize(img, size)
+        # cv2.imwrite(os.path.join(savePath, str(instance_id), saveName)[:-4]+'.jpg', img)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255
         np.save(os.path.join(savePath, str(instance_id), saveName)[:-4]+'.npy', img)
@@ -206,7 +207,7 @@ def saveNumpyInstance(root_dir, mode, size):
 def createInstance2Label(root_dir):
     items = []
 
-    modes = ['train', 'validation']
+    modes = ['train', 'validation', 'validation_2']
     for mode in modes:
         img_tat = mode + '_images'
         vdo_tat = mode + '_videos'
@@ -295,7 +296,7 @@ def createInstanceID(root_dir='data'):
         json.dump(clsDic, f)
 
 def createInstanceID_ALL(root_dir='data'):
-    modes = ['train', 'validation']
+    modes = ['train', 'validation_2']
 
     all_ids = set([])
     for mode in modes:
@@ -313,8 +314,6 @@ def createInstanceID_ALL(root_dir='data'):
         instance = {}
         s_i = set([])
         s_v = set([])
-
-        
 
         for d in l_i:
             for dd in d['annotations']:
@@ -337,8 +336,8 @@ def createInstanceID_ALL(root_dir='data'):
         id_set = s_i & s_v
         
         for ID in id_set:
-            # if instance[ID] > 10 and instance[ID] < 20:
-            all_ids.add(ID)
+            if instance[ID] > 10 and instance[ID] < 20:
+                all_ids.add(ID)
 
     clsDic = {}
 
@@ -353,6 +352,8 @@ def createText(mode, root_dir='data'):
         roots = [os.path.join(root_dir, 'train_dataset_part{}'.format(i+1)) for i in range(6)]
     elif mode == 'validation':
         roots = [os.path.join(root_dir, 'validation_dataset_part{}'.format(i+1)) for i in range(2)]
+    elif mode == 'validation_2':
+        roots = [os.path.join(root_dir, 'validation_dataset_part{}'.format(i+3)) for i in range(2)]
 
     img_dic = {}
     vdo_dic = {}
@@ -473,15 +474,17 @@ if __name__ == "__main__":
     label = {}
     label['label2index'] = {}
     label['index2label'] = {}
-    processTrain(label)
-    processValidation(label)
-    saveNumpyInstance('data', 'train', (256, 256))
-    saveNumpyInstance('data', 'validation', (256, 256))
+    # processTrain(label)
+    # processValidation(label)
+    # saveNumpyInstance('data', 'train', (270, 270))
+    # saveNumpyInstance('data', 'validation', (270, 270))
+    # saveNumpyInstance('data', 'validation_2', (270, 270))
     createInstance2Label('data')
-    createInstanceID()
-    createInstanceID_ALL()
-    createText(mode='train')
-    createText(mode='validation')
-    createVocab()
-    createTF_IDF()
+    # createInstanceID()
+    # createInstanceID_ALL()
+    # createText(mode='train')
+    # createText(mode='validation')
+    # createText(mode='validation_2')
+    # createVocab()
+    # createTF_IDF()
 

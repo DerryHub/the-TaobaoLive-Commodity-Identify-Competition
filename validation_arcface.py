@@ -16,6 +16,7 @@ from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
+from rerank import re_ranking
 # from sklearn.metrics.pairwise import cosine_similarity
 # from joint_bayesian.JointBayesian import verify
 # import joblib
@@ -107,7 +108,7 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
 def evaluate(opt):
     dataset = ValidationArcfaceDataset(root_dir='data/validation_instance/', size=(opt.size, opt.size))
     loader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=4)
-
+    
     if opt.network == 'resnet':
         model = ResNet(opt)
         b_name = opt.network+'_'+opt.mode+'_{}'.format(opt.num_layers_r)
@@ -151,37 +152,39 @@ def evaluate(opt):
     vdo_features = np.zeros((0, opt.embedding_size))
     instances = []
 
-    sizes = [224]
+    # sizes = [224]
     print('Predecting...')
-    for s in sizes:
-        for d in tqdm(loader):
-            img = d['img'].cuda()
-            vdo = d['vdo'].cuda()
-            if s != 224:
-                img = F.interpolate(img, size=(s,s), mode='bilinear', align_corners=False)
-                vdo = F.interpolate(vdo, size=(s,s), mode='bilinear', align_corners=False)
-            instances += d['instance']
-            img_text = d['img_text'].cuda()
-            vdo_text = d['vdo_text'].cuda()
-            img_e = d['img_e'].cuda()
-            vdo_e = d['vdo_e'].cuda()
-            with torch.no_grad():
-                img_f = model(img)
-                vdo_f = model(vdo)
+    # for s in sizes:
+    for d in tqdm(loader):
+        img = d['img'].cuda()
+        vdo = d['vdo'].cuda()
+        # if s != 224:
+        #     img = F.interpolate(img, size=(s,s), mode='bilinear', align_corners=False)
+        #     vdo = F.interpolate(vdo, size=(s,s), mode='bilinear', align_corners=False)
+        instances += d['instance']
+        img_text = d['img_text'].cuda()
+        vdo_text = d['vdo_text'].cuda()
+        img_e = d['img_e'].cuda()
+        vdo_e = d['vdo_e'].cuda()
+        with torch.no_grad():
+            img_f = model(img)
+            vdo_f = model(vdo)
 
-            img_f = img_f.cpu().numpy()
-            vdo_f = vdo_f.cpu().numpy()
+        img_f = img_f.cpu().numpy()
+        vdo_f = vdo_f.cpu().numpy()
 
-            img_features = np.append(img_features, img_f, axis=0)
-            vdo_features = np.append(vdo_features, vdo_f, axis=0)
+        img_features = np.append(img_features, img_f, axis=0)
+        vdo_features = np.append(vdo_features, vdo_f, axis=0)
 
-    # with open('data/instance2label.json', 'r') as f:
-    #     ins2labDic = json.load(f)
-
+    # features = np.concatenate([vdo_features, img_features], axis=0)
     print('Calculating cosine similarity...')
     cos = np.zeros([len(vdo_features), len(img_features)])
     for i in tqdm(range(len(cos)//1000)):
         cos[i*1000:(i+1)*1000] = cosine_similarity(vdo_features[i*1000:(i+1)*1000], img_features)
+
+    # cos = np.zeros([len(vdo_features)+len(img_features), len(vdo_features)+len(img_features)])
+    # for i in tqdm(range(len(cos)//1000)):
+    #     cos[i*1000:(i+1)*1000] = cosine_similarity(features[i*1000:(i+1)*1000], features)
     # length = len(cos) // len(sizes)
     # coss = []
     # for i in range(len(sizes)):
@@ -191,6 +194,10 @@ def evaluate(opt):
     # cos_1 = np.max(coss[:2], axis=0)
     # cos_2 = np.max(coss[2:], axis=0)
     # cos = np.max([cos_1, cos_2], axis=0)
+    # vdo_features = torch.from_numpy(vdo_features)
+    # img_features = torch.from_numpy(img_features)
+    # cos = re_ranking(vdo_features, img_features, 30, 10, 0.2)
+    # print(cos.shape)
     return cos, instances
 
     # rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
@@ -202,6 +209,7 @@ def evaluate(opt):
 
 if __name__ == "__main__":
     opt = get_args_arcface()
+    os.environ["CUDA_VISIBLE_DEVICES"] = '{}'.format(opt.GPUs[0])
     opt.batch_size *= 1
     config_list = opt.validation_config
     cos = 0
@@ -232,21 +240,65 @@ if __name__ == "__main__":
     # cos = np.max([coss_1, coss_2, coss_3], axis=0)
     # cos = cos_1 + cos_2
     argmax = np.argsort(-cos, axis=1)
+    instances = instances[:length]
+    result = {}
+    dic = {}
+    out_imgs = set([])
+    k = 1
     for i in tqdm(range(len(cos))):
         # i = np.argmax(np.max(cos, axis=1))
         for j in argmax[i]:
             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
                 continue
-            if i==j:
-                acc +=1
-                rates_t.append(cos[i, j])
-            else:
-                rates_f.append(cos[i, j])
+            result[i] = j
+            if instances[j] not in dic:
+                d = {}
+                d['id'] = j
+                d['vdos'] = []
+                dic[instances[j]] = d
+            d = {}
+            d['id'] = i
+            d['vdo'] = instances[i]
+            d['score'] = cos[i, j]
+            dic[instances[j]]['vdos'].append(d)
+            if len(dic[instances[j]]['vdos']) >= k:
+                out_imgs.add(instances[j])
+            # if i == j:
+            #     acc += 1
+            #     rates_t.append(cos[i, j])
+            # else:
+            #     rates_f.append(cos[i, j])
             break
         # cos[i, :] = -np.inf
 
-    print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
-    print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
+    print(len(set(result.values())))
+    
+    for key in dic.keys():
+        if len(dic[key]['vdos']) <= k:
+            continue
+        lst = sorted(dic[key]['vdos'], key=lambda x: x['score'], reverse=True)[k:]
+        img_i = dic[key]['id']
+        for d in lst:
+            vdo_i = d['id']
+            for j in argmax[vdo_i]:
+                if instances[j] in out_imgs:
+                    continue
+                result[vdo_i] = j
+                break
+
+    dic = {}
+    for key in result.keys():
+        if result[key] not in dic:
+            
+    
+    print(len(set(result.values())))
+
+    for k in result.keys():
+        if k == result[k]:
+            acc += 1
+
+    # print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
+    # print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
     print(acc/len(cos))
     # # kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
     # training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))

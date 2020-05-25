@@ -212,6 +212,38 @@ MODEL = {
     }
 }
 
+class PreModule(nn.Module):
+    def __init__(self, config):
+        super(PreModule, self).__init__()
+        model_dic = MODEL[config.num_layers_s]
+        stem_width = model_dic['stem_width']
+
+        # stem_width = 32
+
+        self.conv = nn.Sequential(
+                nn.Conv2d(3, stem_width, kernel_size=3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(stem_width),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(stem_width, stem_width, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(stem_width),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(stem_width, stem_width*2, kernel_size=3, stride=1, padding=1, bias=False),
+            )
+
+        self.bn = nn.BatchNorm2d(stem_width*2)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        return x
+        
+
+
 class ResNeSt(nn.Module):
     def __init__(self, config):
         embedding_size = config.embedding_size
@@ -280,35 +312,23 @@ class ResNeSt(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], norm_layer=norm_layer, is_first=False)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, norm_layer=norm_layer)
-        if dilated or dilation == 4:
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=1,
-                                           dilation=2, norm_layer=norm_layer,
-                                           dropblock_prob=dropblock_prob)
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=1,
-                                           dilation=4, norm_layer=norm_layer,
-                                           dropblock_prob=dropblock_prob)
-        elif dilation==2:
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
-                                           dilation=1, norm_layer=norm_layer,
-                                           dropblock_prob=dropblock_prob)
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=1,
-                                           dilation=2, norm_layer=norm_layer,
-                                           dropblock_prob=dropblock_prob)
-        else:
-            self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
-                                           norm_layer=norm_layer,
-                                           dropblock_prob=dropblock_prob)
-            self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
-                                           norm_layer=norm_layer,
-                                           dropblock_prob=dropblock_prob)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
+                                        norm_layer=norm_layer,
+                                        dropblock_prob=dropblock_prob)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=1,
+                                        norm_layer=norm_layer,
+                                        dropblock_prob=dropblock_prob)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.drop = nn.Dropout(final_drop) if final_drop > 0.0 else None
+
+        self.bn_last = nn.BatchNorm1d(embedding_size)
+        self.bn_last.bias.requires_grad_(False)
         # self.fc = nn.Linear(512 * block.expansion, 1000)
-        self.output_layer = nn.Sequential(
-                                    nn.BatchNorm1d(512 * block.expansion),
-                                    nn.Dropout(drop_ratio),
-                                    nn.Linear(512 * block.expansion, embedding_size),
-                                    nn.BatchNorm1d(embedding_size))
+        # self.output_layer = nn.Sequential(
+        #                             nn.BatchNorm1d(512 * block.expansion),
+        #                             nn.Dropout(drop_ratio),
+        #                             nn.Linear(512 * block.expansion, embedding_size),
+        #                             nn.BatchNorm1d(embedding_size))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -380,36 +400,43 @@ class ResNeSt(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)
-        # print(x.size())
+        # x_1 = self.avgpool(x)
         x = self.layer2(x)
-        # print(x.size())
+        # x_2 = self.avgpool(x)
         x = self.layer3(x)
-        # print(x.size())
+        # x_3 = self.avgpool(x)
         x = self.layer4(x)
-        # print(x.size())
-
         x = self.avgpool(x)
+
+        # x = torch.cat([x_1, x_2, x_3, x_4], dim=1)
+        # print(x.size())
         #x = x.view(x.size(0), -1)
         x = torch.flatten(x, 1)
-        if self.drop:
-            x = self.drop(x)
-        # x = self.fc(x)
-        x = self.output_layer(x)
-
-        return l2_norm(x)
+        # if self.drop:
+        #     x = self.drop(x)
+        
+        if self.training:
+            return x, self.bn_last(x)
+        else:
+            return l2_norm(self.bn_last(x))
 
 if __name__ == "__main__":
     net = ResNeSt('aa')
-    # net.load_state_dict(torch.load('trained_models/resnest50-528c19ca.pth'))
-    # net.output_layer = nn.Sequential(
-    #                             nn.BatchNorm1d(512 * 4),
-    #                             nn.Dropout(0.1),
-    #                             nn.Linear(512 * 4, 2048),
-    #                             nn.BatchNorm1d(2048))
-    # net.avgpool = nn.AdaptiveAvgPool2d((1,1))
-    # del net.fc
-    # torch.save(net.state_dict(), 'trained_models/resnest_50.pth')
+    net.load_state_dict(torch.load('trained_models/resnest_50.pth'))
 
-    a = torch.randn(5,3,224,224)
-    b = net(a)
-    print(b.size())
+    # prenet = PreModule('aa')
+    # prenet.conv.load_state_dict(net.conv1.state_dict())
+    # prenet.bn.load_state_dict(net.bn1.state_dict())
+    # torch.save(prenet.state_dict(), 'trained_models/pre_resnest_50.pth')
+    # del net.conv1
+    # del net.bn1
+
+    del net.output_layer
+    # net.avgpool = nn.AdaptiveAvgPool2d((1,1))
+    net.bn_last = nn.BatchNorm1d(2048)
+    # del net.fc
+    torch.save(net.state_dict(), 'trained_models/resnest_50.pth')
+
+    # a = torch.randn(5,3,224,224)
+    # b = net(a)
+    # print(b.size())

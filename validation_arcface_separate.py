@@ -8,47 +8,50 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
-from arcface.resnest import ResNeSt
+from arcface.resnest import ResNeSt, PreModule
 from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset
 from tqdm import tqdm
-from sklearn.metrics.pairwise import cosine_similarity
-from joint_bayesian.JointBayesian import verify
-import joblib
+# from sklearn.metrics.pairwise import cosine_similarity
+# from joint_bayesian.JointBayesian import verify
+# import joblib
 import json
 
-def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
-    print('Classifying with k-means...')
-    kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
-    vdo_cls = kmeans.predict(vdo_features)
-    img_cls = kmeans.predict(img_features)
+def cosine_similarity(a, b):
+    return a@b.T
 
-    vdo_cls = np.array(vdo_cls)
-    img_cls = np.array(img_cls)
+# def kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic):
+#     print('Classifying with k-means...')
+#     kmeans = joblib.load(os.path.join(opt.saved_path, 'kmeans.m'))
+#     vdo_cls = kmeans.predict(vdo_features)
+#     img_cls = kmeans.predict(img_features)
 
-    acc = 0
-    miss = 0
-    rates_t = []
-    rates_f = []
-    for i, vc in enumerate(tqdm(vdo_cls)):
-        l = []
-        arg = np.argwhere(img_cls==vc).reshape(-1)
-        for j in arg:
-            if ins2labDic[instances[i]] == ins2labDic[instances[j]]:
-                similarity = vdo_features[i]@img_features[j].T
-                l.append([j, similarity])
-        if len(l) == 0:
-            miss += 1
-            continue
-        m = max(l, key=lambda x: x[1])
-        if m[0] == i:
-            acc += 1
-            rates_t.append(m[1])
-        else:
-            rates_f.append(m[1])
-    print(miss/len(vdo_cls))
-    return rates_t, rates_f, acc/len(vdo_cls)
+#     vdo_cls = np.array(vdo_cls)
+#     img_cls = np.array(img_cls)
+
+#     acc = 0
+#     miss = 0
+#     rates_t = []
+#     rates_f = []
+#     for i, vc in enumerate(tqdm(vdo_cls)):
+#         l = []
+#         arg = np.argwhere(img_cls==vc).reshape(-1)
+#         for j in arg:
+#             if ins2labDic[instances[i]] == ins2labDic[instances[j]]:
+#                 similarity = vdo_features[i]@img_features[j].T
+#                 l.append([j, similarity])
+#         if len(l) == 0:
+#             miss += 1
+#             continue
+#         m = max(l, key=lambda x: x[1])
+#         if m[0] == i:
+#             acc += 1
+#             rates_t.append(m[1])
+#         else:
+#             rates_f.append(m[1])
+#     print(miss/len(vdo_cls))
+#     return rates_t, rates_f, acc/len(vdo_cls)
 
 
 def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
@@ -74,28 +77,28 @@ def cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic):
             break
     return rates_t, rates_f, acc/len(cos)
 
-def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
-    print('Calculating Joint Bayesian...')
-    G = np.load(os.path.join(opt.saved_path, 'G.npy'))
-    A = np.load(os.path.join(opt.saved_path, 'A.npy'))
+# def joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic):
+#     print('Calculating Joint Bayesian...')
+#     G = np.load(os.path.join(opt.saved_path, 'G.npy'))
+#     A = np.load(os.path.join(opt.saved_path, 'A.npy'))
 
-    scores = verify(A, G, vdo_features, img_features)
+#     scores = verify(A, G, vdo_features, img_features)
 
-    argmax = np.argsort(-scores, axis=1)
-    acc = 0
-    rates_t = []
-    rates_f = []
-    for i in tqdm(range(len(scores))):
-        for j in argmax[i]:
-            if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
-                continue
-            if j == i:
-                acc +=1
-                rates_t.append(scores[i, j])
-            else:
-                rates_f.append(scores[i, j])
-            break
-    return rates_t, rates_f, acc/len(scores)
+#     argmax = np.argsort(-scores, axis=1)
+#     acc = 0
+#     rates_t = []
+#     rates_f = []
+#     for i in tqdm(range(len(scores))):
+#         for j in argmax[i]:
+#             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
+#                 continue
+#             if j == i:
+#                 acc +=1
+#                 rates_t.append(scores[i, j])
+#             else:
+#                 rates_f.append(scores[i, j])
+#             break
+#     return rates_t, rates_f, acc/len(scores)
 
 
 def evaluate(opt):
@@ -124,11 +127,12 @@ def evaluate(opt):
         b_name_image = b_name + '_image'
         b_name_video = b_name + '_video'
     elif opt.network == 'resnest':
-        model_image = ResNeSt(opt)
-        model_video = ResNeSt(opt)
+        pre_model_image = PreModule(opt)
+        pre_model_video = PreModule(opt)
+        model = ResNeSt(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_s)
-        b_name_image = b_name + '_image'
-        b_name_video = b_name + '_video'
+        p_name_image = 'pre_'+b_name+'_image'
+        p_name_video = 'pre_'+b_name+'_video'
     elif 'efficientnet' in opt.network:
         model = EfficientNet(opt)
         b_name = opt.network
@@ -136,13 +140,19 @@ def evaluate(opt):
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
-    model_image.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name_image+'.pth')))
-    model_image.cuda()
-    model_image.eval()
+    print(b_name)
 
-    model_video.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name_video+'.pth')))
-    model_video.cuda()
-    model_video.eval()
+    pre_model_image.load_state_dict(torch.load(os.path.join(opt.saved_path, p_name_image+'.pth')))
+    pre_model_image.cuda()
+    pre_model_image.eval()
+
+    pre_model_video.load_state_dict(torch.load(os.path.join(opt.saved_path, p_name_video+'.pth')))
+    pre_model_video.cuda()
+    pre_model_video.eval()
+
+    model.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
+    model.cuda()
+    model.eval()
 
     img_features = np.zeros((0, opt.embedding_size))
     vdo_features = np.zeros((0, opt.embedding_size))
@@ -158,8 +168,10 @@ def evaluate(opt):
         img_e = d['img_e'].cuda()
         vdo_e = d['vdo_e'].cuda()
         with torch.no_grad():
-            img_f = model_image(img)
-            vdo_f = model_video(vdo)
+            img = pre_model_image(img)
+            vdo = pre_model_video(vdo)
+            img_f = model(img)
+            vdo_f = model(vdo)
 
         img_f = img_f.cpu().numpy()
         vdo_f = vdo_f.cpu().numpy()
@@ -173,6 +185,7 @@ def evaluate(opt):
 
 if __name__ == "__main__":
     opt = get_args_arcface()
+    os.environ["CUDA_VISIBLE_DEVICES"] = '{}'.format(opt.GPUs[0])
     opt.batch_size *= 2
     config_list = opt.validation_config
     cos = 0

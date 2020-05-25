@@ -15,7 +15,7 @@ from arcface.resnest import ResNeSt
 from arcface.resnest_cbam import ResNeStCBAM
 from arcface.iresnet import iResNet
 from arcface.efficientnet import EfficientNet
-from arcface.head import Arcface, LinearLayer, AdaCos, SparseCircleLoss
+from arcface.head import Arcface, LinearLayer, AdaCos, SparseCircleLoss, CombinedMargin
 from dataset import ArcfaceDataset, HardTripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
@@ -23,6 +23,7 @@ from arcface.utils import l2_norm
 from torch.optim import AdamW
 import numpy as np
 from utils import separate_bn_paras, collater_HardTriplet
+from softmax_loss import CrossEntropyLabelSmooth
 
 def train(opt):
     torch.multiprocessing.set_sharing_strategy('file_system')
@@ -39,10 +40,10 @@ def train(opt):
 
     training_params = {"batch_size": opt.batch_size * num_gpus,
                         "shuffle": True,
-                        "drop_last": True,
+                        "drop_last": False,
                         "num_workers": opt.workers}
 
-    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
+    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="all", size=(opt.size, opt.size))
     # training_set = HardTripletDataset(
     #     root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)
@@ -60,6 +61,8 @@ def train(opt):
         head = AdaCos(opt)
     elif af == 'circleloss':
         head = SparseCircleLoss(opt)
+    elif af == 'combinedmargin':
+        head = CombinedMargin(opt)
     else:
         raise RuntimeError('Cannot Find the Head: {}'.format(opt.head))
 
@@ -106,11 +109,6 @@ def train(opt):
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
-    # head = Arcface(opt)
-    # head = AdaCos(opt)
-    # linear = LinearLayer(opt)
-    # l_name = 'linear'
-
     print('backbone: {}'.format(b_name))
     print('head: {}'.format(h_name))
 
@@ -120,8 +118,6 @@ def train(opt):
         if os.path.isfile(os.path.join(opt.saved_path, h_name+'.pth')):
             print('Loading Head Model...')
             head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
-        # if os.path.isfile(os.path.join(opt.saved_path, l_name+'.pth')):
-        #     linear.load_state_dict(torch.load(os.path.join(opt.saved_path, l_name+'.pth')))
 
     if not os.path.isdir(opt.saved_path):
         os.makedirs(opt.saved_path)
@@ -150,7 +146,8 @@ def train(opt):
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, verbose=True)
 
-    cost = nn.CrossEntropyLoss()
+    # cost = nn.CrossEntropyLoss()
+    cost = CrossEntropyLabelSmooth(opt.num_classes)
 
     best_loss = np.inf
 
@@ -174,33 +171,17 @@ def train(opt):
             # iORv = data['iORv'].cuda()
             # label = data['label'].cuda()
 
-            embedding = backbone(img)
-            # embedding_2 = backbone(vdo)
-
-            # cos = torch.mm(embedding, embedding.t())
-            # cos = F.softmax(cos, dim=1)
-            # embedding_2 = torch.mm(cos, embedding)
-
-            # print(torch.sum(cos, dim=1))
+            _, embedding = backbone(img)
 
             if opt.head == 'circleloss':
                 loss, output = head([embedding, instance])
             else:
                 output = head([embedding, instance])
                 loss = cost(output, instance)
-            # output_2 = head([embedding_2, instance])
-            # label_output = linear(embedding)
 
             total += instance.size(0)
             acc += (torch.argmax(output, dim=1)==instance).sum().float()
-            # acc += (torch.argmax(output_2, dim=1)==instance).sum().float()
-            # acc_label += (torch.argmax(label_output, dim=1)==label).sum().float()
 
-            # loss = (cost(output_1, instance) + cost(output_2, instance))/2
-            
-            # loss_2 = cost(output_2, instance)
-            # loss_label = cost(label_output, label)
-            # loss_head = torch.sum(torch.sum(l2_norm(head.module.kernel, axis=0), dim=1)**2)
             loss_head = 0
             loss_all = loss
             loss_all.backward()
@@ -221,7 +202,6 @@ def train(opt):
             best_loss = total_loss
             torch.save(backbone.module.state_dict(), os.path.join(opt.saved_path, b_name+'.pth'))
             torch.save(head.module.state_dict(), os.path.join(opt.saved_path, h_name+'.pth'))
-            # torch.save(linear.module.state_dict(), os.path.join(opt.saved_path, l_name+'.pth'))
 
 if __name__ == "__main__":
     opt = get_args_arcface()

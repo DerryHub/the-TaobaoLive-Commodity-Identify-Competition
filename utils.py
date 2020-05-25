@@ -290,6 +290,8 @@ def collater_HardTriplet(data):
 
     return {'img': imgs, 'instance': instances}
 
+# loss
+
 class TripletFocalLoss():
     def __init__(self, alpha, gamma):
         self.alpha = alpha

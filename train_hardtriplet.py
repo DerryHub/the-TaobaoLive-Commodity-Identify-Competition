@@ -11,6 +11,7 @@ from arcface.inception_v4 import InceptionV4
 from arcface.inceptionresnet_v2 import InceptionResNetV2
 from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
+from arcface.resnest import ResNeSt
 from arcface.head import Arcface, LinearLayer
 from dataset import HardTripletDataset
 from config import get_args_arcface
@@ -18,6 +19,8 @@ from arcface.utils import l2_norm
 from utils import HardTripletLoss, AdamW, collater_HardTriplet
 import numpy as np
 from utils import separate_bn_paras
+
+from triplet_loss import TripletLoss
 
 def train(opt):
     print(opt)
@@ -36,10 +39,11 @@ def train(opt):
                         "num_workers": opt.workers}
 
     training_set = HardTripletDataset(
-        root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
+        root_dir=opt.data_path, mode="all", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)
 
     opt.num_classes = training_set.num_classes
+    print(opt.num_classes)
 
     if opt.network == 'resnet':
         backbone = ResNet(opt)
@@ -65,6 +69,10 @@ def train(opt):
         backbone = ResNetCBAM(opt)
         b_name = opt.network+'_{}'.format(opt.num_layers_c)
         h_name = 'arcface_'+b_name
+    elif opt.network == 'resnest':
+        backbone = ResNeSt(opt)
+        b_name = opt.network+'_{}'.format(opt.num_layers_s)
+        h_name = 'arcface_'+b_name
     else:
         raise RuntimeError('Cannot Find the Model: {}'.format(opt.network))
 
@@ -74,9 +82,10 @@ def train(opt):
     print('head: {}'.format(h_name))
 
     if opt.resume:
-        print('Loading model...')
+        print('Loading backbone model...')
         backbone.load_state_dict(torch.load(os.path.join(opt.saved_path, b_name+'.pth')))
         if os.path.isfile(os.path.join(opt.saved_path, h_name+'.pth')):
+            print('Loading head model...')
             head.load_state_dict(torch.load(os.path.join(opt.saved_path, h_name+'.pth')))
 
     if not os.path.isdir(opt.saved_path):
@@ -100,7 +109,8 @@ def train(opt):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, verbose=True)
 
     cost_arcface = nn.CrossEntropyLoss()
-    cost = HardTripletLoss(opt.threshold)
+    # cost = HardTripletLoss(opt.threshold)
+    cost = TripletLoss()
 
     best_loss = np.inf
 
@@ -119,16 +129,16 @@ def train(opt):
             img = data['img'].cuda()
             instance = data['instance'].cuda()
 
-            embedding = backbone(img)
+            embedding_tri,  embedding_arc = backbone(img)
 
-            output = head([embedding, instance])
+            output = head([embedding_arc, instance])
 
-            loss_1, acc_ = cost(embedding, instance)
+            loss_1 = cost(embedding_tri, instance)
             loss_2 = cost_arcface(output, instance)
 
             total += instance.size(0)
             acc_a += (torch.argmax(output, dim=1)==instance).sum().float()
-            acc_t += acc_
+            # acc_t += acc_
 
             loss = loss_1 + loss_2
             loss.backward()
@@ -139,8 +149,8 @@ def train(opt):
             progress_bar.set_description('Epoch: {}/{}. Iteration: {}/{}'.format(epoch + 1, opt.num_epochs, iter + 1, num_iter_per_epoch))
             
             progress_bar.write(
-                'Batch loss: {:.5f}\tTotal loss: {:.5f}\tAccuracy tri: {:.5f}\tAccuracy arc: {:.5f}'.format(
-                loss, total_loss, acc_t/total, acc_a/total))
+                'Batch loss: {:.5f}\tTotal loss: {:.5f}\tTriplet loss: {:.5f}\tAccuracy arc: {:.5f}'.format(
+                loss, total_loss, loss_1, acc_a/total))
 
         scheduler.step(np.mean(epoch_loss))
 
