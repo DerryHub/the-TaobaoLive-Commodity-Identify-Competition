@@ -223,7 +223,6 @@ if __name__ == "__main__":
         opt.num_layers_d = num_layers
         opt.num_layers_s = num_layers
         cos_, instances = evaluate(opt)
-        # print('aaa')
         cos += cos_ * r
     with open('data/instance2label.json', 'r') as f:
         ins2labDic = json.load(f)
@@ -251,17 +250,13 @@ if __name__ == "__main__":
             if ins2labDic[instances[i]] != ins2labDic[instances[j]]:
                 continue
             result[i] = j
-            if instances[j] not in dic:
-                d = {}
-                d['id'] = j
-                d['vdos'] = []
-                dic[instances[j]] = d
+            if j not in dic:
+                dic[j] = []
             d = {}
             d['id'] = i
-            d['vdo'] = instances[i]
             d['score'] = cos[i, j]
-            dic[instances[j]]['vdos'].append(d)
-            if len(dic[instances[j]]['vdos']) >= k:
+            dic[j].append(d)
+            if len(dic[j]) >= k:
                 out_imgs.add(instances[j])
             # if i == j:
             #     acc += 1
@@ -271,27 +266,44 @@ if __name__ == "__main__":
             break
         # cos[i, :] = -np.inf
 
-    print(len(set(result.values())))
-    
-    for key in dic.keys():
-        if len(dic[key]['vdos']) <= k:
-            continue
-        lst = sorted(dic[key]['vdos'], key=lambda x: x['score'], reverse=True)[k:]
-        img_i = dic[key]['id']
-        for d in lst:
-            vdo_i = d['id']
-            for j in argmax[vdo_i]:
-                if instances[j] in out_imgs:
-                    continue
-                result[vdo_i] = j
-                break
+    # print(len(set(result.values())))
 
-    dic = {}
-    for key in result.keys():
-        if result[key] not in dic:
+    # for i in range(5):
+    #     for key in dic.keys():
+    #         if len(dic[key]) <= k:
+    #             continue
+    #         lst = sorted(dic[key], key=lambda x: x['score'], reverse=True)
+    #         max_s = lst[0]['score']
+    #         lst = lst[k:]
+    #         for d in lst:
+    #             if d['score'] > max_s - 0.05:
+    #                 continue
+    #             vdo_i = d['id']
+    #             for j in argmax[vdo_i]:
+    #                 if instances[j] in out_imgs or ins2labDic[instances[vdo_i]] != ins2labDic[instances[j]]:
+    #                     continue
+    #                 result[vdo_i] = j
+    #                 break
+
+    #     dic = {}
+    #     for key in result.keys():
+    #         if result[key] not in dic:
+    #             dic[result[key]] = []
+    #         d = {}
+    #         d['id'] = key
+    #         d['score'] = cos[key, result[key]]
+    #         dic[result[key]].append(d)
+    #         if len(dic[result[key]]) >= k:
+    #             out_imgs.add(instances[result[key]])
+
+    
+    # l = []
+    # for key in dic.keys():
+    #     l.append(len(dic[key]))
+    # print(sorted(l))
             
     
-    print(len(set(result.values())))
+    # print(len(set(result.values())))
 
     for k in result.keys():
         if k == result[k]:

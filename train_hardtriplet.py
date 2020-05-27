@@ -24,7 +24,9 @@ from triplet_loss import TripletLoss
 
 def train(opt):
     print(opt)
-    device_ids = opt.GPUs
+    gpus = list(map(str, opt.GPUs))
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(gpus)
+    device_ids = list(range(len(gpus)))
     if torch.cuda.is_available():
         num_gpus = len(device_ids)
     else:
@@ -39,7 +41,7 @@ def train(opt):
                         "num_workers": opt.workers}
 
     training_set = HardTripletDataset(
-        root_dir=opt.data_path, mode="all", size=(opt.size, opt.size), n_samples=opt.n_samples)
+        root_dir=opt.data_path, mode="train_2", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)
 
     opt.num_classes = training_set.num_classes

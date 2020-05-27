@@ -114,9 +114,40 @@ def processTrain(label):
         json.dump(label, f)
 
 def processValidation(label):
-    roots = [1, 2, 3, 4]
+    roots = [1, 2]
     img_tat = 'data/validation_images'
     vdo_tat = 'data/validation_videos' 
+
+    if os.path.isdir(img_tat):
+        rmtree(img_tat)
+    os.makedirs(img_tat)
+
+    if os.path.isdir(vdo_tat):
+        rmtree(vdo_tat)
+    os.makedirs(vdo_tat)
+
+    annotation_image = {}
+    annotation_image['annotations'] = []
+
+    annotation_video = {}
+    annotation_video['annotations'] = []
+    
+    for i in roots:
+        root = 'data/validation_dataset_part{}'.format(i)
+        print('processing validation data [{}/{}]:'.format(i, len(roots)))
+        annotation_image, label = processImage(img_tat, root, annotation_image, label)
+        annotation_video, label = processVideo(vdo_tat, root, annotation_video, label)
+    
+    with open(img_tat+'_annotation.json', 'w') as f:
+        json.dump(annotation_image, f)
+    
+    with open(vdo_tat+'_annotation.json', 'w') as f:
+        json.dump(annotation_video, f)
+
+def processValidation_2(label):
+    roots = [3, 4]
+    img_tat = 'data/validation_2_images'
+    vdo_tat = 'data/validation_2_videos' 
 
     if os.path.isdir(img_tat):
         rmtree(img_tat)
@@ -295,8 +326,60 @@ def createInstanceID(root_dir='data'):
     with open(os.path.join(root_dir, 'instanceID.json'), 'w') as f:
         json.dump(clsDic, f)
 
-def createInstanceID_ALL(root_dir='data'):
+def createInstanceID_2(root_dir='data'):
     modes = ['train', 'validation_2']
+
+    all_ids = set([])
+    for mode in modes:
+        img_tat = mode + '_images'
+        vdo_tat = mode + '_videos'
+
+        with open(os.path.join(root_dir, img_tat+'_annotation.json'), 'r') as f:
+            d_i = json.load(f)
+        with open(os.path.join(root_dir, vdo_tat+'_annotation.json'), 'r') as f:
+            d_v = json.load(f)
+
+        l_i = d_i['annotations']
+        l_v = d_v['annotations']
+
+        instance = {}
+        s_i = set([])
+        s_v = set([])
+
+        for d in l_i:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    s_i.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
+                    else:
+                        instance[dd['instance_id']] += 1
+
+        for d in l_v:
+            for dd in d['annotations']:
+                if dd['instance_id'] > 0:
+                    s_v.add(dd['instance_id'])
+                    if dd['instance_id'] not in instance:
+                        instance[dd['instance_id']] = 1
+                    else:
+                        instance[dd['instance_id']] += 1
+
+        id_set = s_i & s_v
+        
+        for ID in id_set:
+            if instance[ID] > 10 and instance[ID] < 20:
+                all_ids.add(ID)
+
+    clsDic = {}
+
+    for i in all_ids:
+        clsDic[i] = len(clsDic)
+    # print(len(clsDic))
+    with open(os.path.join(root_dir, 'instanceID_2.json'), 'w') as f:
+        json.dump(clsDic, f)
+
+def createInstanceID_ALL(root_dir='data'):
+    modes = ['train', 'validation_2', 'validation']
 
     all_ids = set([])
     for mode in modes:
@@ -474,11 +557,12 @@ if __name__ == "__main__":
     label = {}
     label['label2index'] = {}
     label['index2label'] = {}
-    # processTrain(label)
-    # processValidation(label)
-    # saveNumpyInstance('data', 'train', (270, 270))
-    # saveNumpyInstance('data', 'validation', (270, 270))
-    # saveNumpyInstance('data', 'validation_2', (270, 270))
+    processTrain(label)
+    processValidation(label)
+    processValidation_2(label)
+    saveNumpyInstance('data', 'train', (270, 270))
+    saveNumpyInstance('data', 'validation', (270, 270))
+    saveNumpyInstance('data', 'validation_2', (270, 270))
     createInstance2Label('data')
     # createInstanceID()
     # createInstanceID_ALL()

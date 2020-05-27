@@ -53,7 +53,7 @@ def get_args_efficientdet():
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
     parser.add_argument("--size", type=int, default=256, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=128, help="The number of images per batch")
+    parser.add_argument("--batch_size", type=int, default=96, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="data", help="the root folder of dataset")
@@ -66,11 +66,11 @@ def get_args_arcface():
     parser.add_argument("--workers", type=int, default=96)
     parser.add_argument('--pretrain', type=bool, default=False)
     parser.add_argument("--s", type=float, default=64.0)
-    parser.add_argument("--m", type=float, default=0.7)
+    parser.add_argument("--m", type=float, default=0.9)
     parser.add_argument("--ms", type=list, default=[1, 0.6, 0.2])
     parser.add_argument('--alpha', type=float, default=0.25)
     parser.add_argument('--gamma', type=float, default=1.5)
-    parser.add_argument('--threshold', type=float, default=0.3)
+    parser.add_argument('--threshold', type=float, default=0.6)
     parser.add_argument("--GPUs", type=list, default=[0])
     parser.add_argument("--n_samples", type=int, default=4)
     parser.add_argument("--network_text", type=str, default='textcnn', help="[bert, tf_idf, textcnn]")
@@ -79,7 +79,7 @@ def get_args_arcface():
     parser.add_argument("--head", type=str, default='arcface', help="[arcface, adacos, circleloss, combinedmargin]")
 
     parser.add_argument("--validation_config", type=list,
-                        default=[('resnest', 256, 50, 1)])
+                        default=[('resnest', 256, 101, 1)])
 
     # resnest cbam config
     parser.add_argument("--num_layers_sc", type=int, default=50, help="[50, 101]")
@@ -88,7 +88,7 @@ def get_args_arcface():
     parser.add_argument("--num_layers_i", type=int, default=50, help="[50, 101, 152]")
 
     # resnest config
-    parser.add_argument("--num_layers_s", type=int, default=50, help="[50, 101]")
+    parser.add_argument("--num_layers_s", type=int, default=101, help="[50, 101, 200]")
 
     # resnet config
     parser.add_argument("--num_layers_r", type=int, default=50, help="[50, 100, 152]")

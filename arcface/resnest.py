@@ -209,6 +209,10 @@ MODEL = {
     101:{
         'layers': [3, 4, 23, 3],
         'stem_width': 64
+    },
+    200:{
+        'layers': [3, 24, 36, 3],
+        'stem_width': 64
     }
 }
 
@@ -252,8 +256,8 @@ class ResNeSt(nn.Module):
         layers = model_dic['layers']
         stem_width = model_dic['stem_width']
 
-        # layers = [3, 4, 6, 3]
-        # stem_width = 32
+        # layers = [3, 24, 36, 3]
+        # stem_width = 64
         # drop_ratio = 0.1
         # embedding_size = 2048
 
@@ -414,7 +418,9 @@ class ResNeSt(nn.Module):
         x = torch.flatten(x, 1)
         # if self.drop:
         #     x = self.drop(x)
-        
+
+        # return self.output_layer(x)
+
         if self.training:
             return x, self.bn_last(x)
         else:
@@ -422,7 +428,7 @@ class ResNeSt(nn.Module):
 
 if __name__ == "__main__":
     net = ResNeSt('aa')
-    net.load_state_dict(torch.load('trained_models/resnest_50.pth'))
+    net.load_state_dict(torch.load('trained_models/resnest200-75117900.pth'))
 
     # prenet = PreModule('aa')
     # prenet.conv.load_state_dict(net.conv1.state_dict())
@@ -431,11 +437,11 @@ if __name__ == "__main__":
     # del net.conv1
     # del net.bn1
 
-    del net.output_layer
+    # del net.output_layer
     # net.avgpool = nn.AdaptiveAvgPool2d((1,1))
     net.bn_last = nn.BatchNorm1d(2048)
-    # del net.fc
-    torch.save(net.state_dict(), 'trained_models/resnest_50.pth')
+    del net.fc
+    torch.save(net.state_dict(), 'trained_models/resnest_200.pth')
 
     # a = torch.randn(5,3,224,224)
     # b = net(a)

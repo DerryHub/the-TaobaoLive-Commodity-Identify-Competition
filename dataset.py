@@ -407,8 +407,11 @@ class ArcfaceDataset(Dataset):
         if mode == 'train':
             modes = ['train']
             instanceFile = 'instanceID.json'
-        else:
+        elif mode == 'train_2':
             modes = ['train', 'validation_2']
+            instanceFile = 'instanceID_2.json'
+        elif mode == 'all':
+            modes = ['train', 'validation_2', 'validation']
             instanceFile = 'instanceID_all.json'
 
         with open(os.path.join(root_dir, instanceFile), 'r') as f:
@@ -503,17 +506,17 @@ class ArcfaceDataset(Dataset):
 
         img = cv2.resize(img, self.size)
 
-        '''random erasing'''
-        if np.random.rand() < 0.5:
-            w = h = 256
-            while w >= 256 or h >= 256:
-                r = np.random.uniform(0.3, 1/0.3)
-                s = 256*256*np.random.uniform(0.02, 0.4)
-                w = int(np.sqrt(s*r))
-                h = int(np.sqrt(s/r))
-            s_w = random.randint(0, 256-w)
-            s_h = random.randint(0, 256-h)
-            img[s_h:s_h+h, s_w:s_w+w, :] = 0
+        # '''random erasing'''
+        # if np.random.rand() < 0.5:
+        #     w = h = 256
+        #     while w >= 256 or h >= 256:
+        #         r = np.random.uniform(0.3, 1/0.3)
+        #         s = 256*256*np.random.uniform(0.02, 0.4)
+        #         w = int(np.sqrt(s*r))
+        #         h = int(np.sqrt(s/r))
+        #     s_w = random.randint(0, 256-w)
+        #     s_h = random.randint(0, 256-h)
+        #     img[s_h:s_h+h, s_w:s_w+w, :] = 0
         
         # print(img.shape)
         instance = torch.tensor(self.clsDic[str(instance_id)])
@@ -809,8 +812,11 @@ class HardTripletDataset(Dataset):
         if mode == 'train':
             modes = ['train']
             instanceFile = 'instanceID.json'
-        else:
+        elif mode == 'train_2':
             modes = ['train', 'validation_2']
+            instanceFile = 'instanceID_2.json'
+        elif mode == 'all':
+            modes = ['train', 'validation_2', 'validation']
             instanceFile = 'instanceID_all.json'
 
         with open(os.path.join(root_dir, instanceFile), 'r') as f:
@@ -881,7 +887,7 @@ class HardTripletDataset(Dataset):
             # img = np.array(img)
             # img = img.astype(np.float32) / 255
             # '''randAug'''
-            # assert self.size[0] == 256
+            assert self.size[0] == 256
             if self.size[0] != 256:
                 r = 256 / self.size[0]
                 img = cv2.resize(img, (int(270/r), int(270/r)))
@@ -892,16 +898,16 @@ class HardTripletDataset(Dataset):
 
             img = img[rh:self.size[0]+rh, rw:self.size[1]+rw, :]
 
-            if np.random.rand() < 0.5:
-                w = h = 256
-                while w >= 256 or h >= 256:
-                    r = np.random.uniform(0.3, 1/0.3)
-                    s = 256*256*np.random.uniform(0.02, 0.4)
-                    w = int(np.sqrt(s*r))
-                    h = int(np.sqrt(s/r))
-                s_w = random.randint(0, 256-w)
-                s_h = random.randint(0, 256-h)
-                img[s_h:s_h+h, s_w:s_w+w, :] = 0
+            # if np.random.rand() < 0.5:
+            #     w = h = 256
+            #     while w >= 256 or h >= 256:
+            #         r = np.random.uniform(0.3, 1/0.3)
+            #         s = 256*256*np.random.uniform(0.02, 0.4)
+            #         w = int(np.sqrt(s*r))
+            #         h = int(np.sqrt(s/r))
+            #     s_w = random.randint(0, 256-w)
+            #     s_h = random.randint(0, 256-h)
+            #     img[s_h:s_h+h, s_w:s_w+w, :] = 0
 
             instance_t = torch.tensor(instance)
 
@@ -945,6 +951,7 @@ class ValidationArcfaceDataset(Dataset):
             self.textDic_v[k] = text2num(self.textDic_v[k])
         instances = os.listdir(root_dir)
         self.items = []
+        # s = ''
         print('Loading Data...')
         for instance in tqdm(instances):
             imgs = os.listdir(root_dir+instance)
@@ -968,7 +975,10 @@ class ValidationArcfaceDataset(Dataset):
             if len(l) < 4:
                 continue
             l.append(instance)
+            # s += '{}\t{}\n'.format(l[0], l[2])
             self.items.append(l)
+        # with open('validation_path.txt', 'w') as f:
+        #     f.write(s)
         self.length = len(self.items)
         print('Done')
         self.transform = transforms.Normalize(
