@@ -16,11 +16,8 @@ from arcface.head import Arcface, LinearLayer
 from dataset import HardTripletDataset
 from config import get_args_arcface
 from arcface.utils import l2_norm
-from utils import HardTripletLoss, AdamW, collater_HardTriplet
+from utils import HardTripletLoss, AdamW, collater_HardTriplet, separate_bn_paras, TripletLoss
 import numpy as np
-from utils import separate_bn_paras
-
-from triplet_loss import TripletLoss
 
 def train(opt):
     print(opt)
@@ -41,7 +38,7 @@ def train(opt):
                         "num_workers": opt.workers}
 
     training_set = HardTripletDataset(
-        root_dir=opt.data_path, mode="train_2", size=(opt.size, opt.size), n_samples=opt.n_samples)
+        root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)
 
     opt.num_classes = training_set.num_classes

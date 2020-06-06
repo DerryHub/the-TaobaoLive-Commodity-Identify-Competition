@@ -2,7 +2,6 @@ import torch
 from torch import nn
 from collections import namedtuple
 from arcface.utils import l2_norm, Flatten, SentVec_TFIDF, IorV
-from bert.bert import BertModel
 
 
 class SEModule(nn.Module):

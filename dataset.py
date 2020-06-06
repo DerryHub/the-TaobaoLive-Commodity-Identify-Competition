@@ -231,7 +231,7 @@ class EfficientdetDataset(Dataset):
                 t.append(tats[i])
                 self.images.append(t)
         # print(len(self.images))
-        self.images = self.images[:1000]
+        # self.images = self.images[:1000]
         print('Done')
 
     def __len__(self):
@@ -795,7 +795,7 @@ class TripletDataset(Dataset):
 
 class HardTripletDataset(Dataset):
     def __init__(self, root_dir='data', mode='train', size=(112, 112), flip_x=0.5, n_samples=4):
-        assert mode in ['train', 'all']
+        assert mode in ['train', 'all', 'train_2']
 
         mean=[0.55574415, 0.51230767, 0.51123354]
         aa_params = dict(
@@ -994,14 +994,14 @@ class ValidationArcfaceDataset(Dataset):
         vdo_text = self.textDic_v[textName_vdo]
         img_text = torch.Tensor(img_text).long()
         vdo_text = torch.Tensor(vdo_text).long()
-        img = np.load(os.path.join(self.root_dir, imgPath))
-        vdo = np.load(os.path.join(self.root_dir, vdoPath))
-        # img = cv2.imread(os.path.join(self.root_dir, imgPath))
-        # vdo = cv2.imread(os.path.join(self.root_dir, vdoPath))
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # img = img.astype(np.float32) / 255
-        # vdo = cv2.cvtColor(vdo, cv2.COLOR_BGR2RGB)
-        # vdo = vdo.astype(np.float32) / 255
+        # img = np.load(os.path.join(self.root_dir, imgPath))
+        # vdo = np.load(os.path.join(self.root_dir, vdoPath))
+        img = cv2.imread(os.path.join(self.root_dir, imgPath))
+        vdo = cv2.imread(os.path.join(self.root_dir, vdoPath))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255
+        vdo = cv2.cvtColor(vdo, cv2.COLOR_BGR2RGB)
+        vdo = vdo.astype(np.float32) / 255
         
         hi, wi, ci = img.shape
         hv, wv, cv = vdo.shape

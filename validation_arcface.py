@@ -16,7 +16,6 @@ from arcface.efficientnet import EfficientNet
 from config import get_args_arcface
 from dataset import ValidationArcfaceDataset, ArcfaceDataset
 from tqdm import tqdm
-from rerank import re_ranking
 # from sklearn.metrics.pairwise import cosine_similarity
 # from joint_bayesian.JointBayesian import verify
 # import joblib
@@ -182,30 +181,7 @@ def evaluate(opt):
     for i in tqdm(range(len(cos)//1000)):
         cos[i*1000:(i+1)*1000] = cosine_similarity(vdo_features[i*1000:(i+1)*1000], img_features)
 
-    # cos = np.zeros([len(vdo_features)+len(img_features), len(vdo_features)+len(img_features)])
-    # for i in tqdm(range(len(cos)//1000)):
-    #     cos[i*1000:(i+1)*1000] = cosine_similarity(features[i*1000:(i+1)*1000], features)
-    # length = len(cos) // len(sizes)
-    # coss = []
-    # for i in range(len(sizes)):
-    #     for j in range(len(sizes)):
-    #         coss.append(cos[i*length:(i+1)*length, j*length:(j+1)*length])
-    # # cos = np.max([np.max(coss[:2], axis=0), np.max(coss[2:], axis=0)], axis=0)
-    # cos_1 = np.max(coss[:2], axis=0)
-    # cos_2 = np.max(coss[2:], axis=0)
-    # cos = np.max([cos_1, cos_2], axis=0)
-    # vdo_features = torch.from_numpy(vdo_features)
-    # img_features = torch.from_numpy(img_features)
-    # cos = re_ranking(vdo_features, img_features, 30, 10, 0.2)
-    # print(cos.shape)
     return cos, instances
-
-    # rates_t, rates_f, acc = cal_cosine_similarity(vdo_features, img_features, instances, ins2labDic)
-    # # rates_t, rates_f, acc = joint_bayesian(opt, vdo_features, img_features, instances, ins2labDic)
-    # # rates, acc = kmeans_classifer(opt, vdo_features, img_features, instances, ins2labDic)
-    # print(sum(rates_t)/len(rates_t), min(rates_t), max(rates_t))
-    # print(sum(rates_f)/len(rates_f), min(rates_f), max(rates_f))
-    # print(acc)
 
 if __name__ == "__main__":
     opt = get_args_arcface()

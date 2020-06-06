@@ -22,8 +22,7 @@ from arcface.utils import l2_norm
 # from utils import AdamW
 from torch.optim import AdamW
 import numpy as np
-from utils import separate_bn_paras, collater_HardTriplet
-from softmax_loss import CrossEntropyLabelSmooth
+from utils import separate_bn_paras, collater_HardTriplet, CrossEntropyLabelSmooth
 
 def train(opt):
     torch.multiprocessing.set_sharing_strategy('file_system')
@@ -43,7 +42,7 @@ def train(opt):
                         "drop_last": False,
                         "num_workers": opt.workers}
 
-    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train_2", size=(opt.size, opt.size))
+    training_set = ArcfaceDataset(root_dir=opt.data_path, mode="train", size=(opt.size, opt.size))
     # training_set = HardTripletDataset(
     #     root_dir=opt.data_path, mode="train", size=(opt.size, opt.size), n_samples=opt.n_samples)
     training_generator = DataLoader(training_set, **training_params)

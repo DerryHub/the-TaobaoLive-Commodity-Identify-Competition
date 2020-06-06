@@ -15,9 +15,10 @@ from arcface.densenet import DenseNet
 from arcface.resnet_cbam import ResNetCBAM
 from arcface.resnest import ResNeSt
 from config import get_args_efficientdet, get_args_arcface
-from joint_bayesian.JointBayesian import verify
+# from joint_bayesian.JointBayesian import verify
 from tqdm import tqdm
 import json
+from collections import Counter
 
 def cosine_similarity(a, b):
     return a@b.T
@@ -122,7 +123,7 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
         for i in range(argmax.shape[0]):
             # d = {}
             for am in argmax[i, :]:
-                if cos[i, am] > 0:
+                if cos[i, am] > 0.1:
                     vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], cos[i, am], i+1000*index, am])
                 #         if img_IDs[am] not in d:
                 #             d[img_IDs[am]] = [cos[i, am], cos[i, am], am]
@@ -140,26 +141,26 @@ def cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k):
                     # vdo_id, img_id, score, vdo_index, img_index
     return vdo2img
 
-def joint_bayesian(opt, vdo_features, img_features, vdo_IDs, img_IDs, k):
-    print('Calculating Joint Bayesian...')
-    G = np.load(os.path.join(opt.saved_path, 'G.npy'))
-    A = np.load(os.path.join(opt.saved_path, 'A.npy'))
+# def joint_bayesian(opt, vdo_features, img_features, vdo_IDs, img_IDs, k):
+#     print('Calculating Joint Bayesian...')
+#     G = np.load(os.path.join(opt.saved_path, 'G.npy'))
+#     A = np.load(os.path.join(opt.saved_path, 'A.npy'))
 
-    vdo2img = []
-    length = vdo_features.shape[0]
-    for index in tqdm(range(1+(length-1)//1000)):
-        if index < length//1000:
-            scores = verify(A, G, vdo_features[1000*index:1000*(index+1)], img_features)
-        else:
-            scores = verify(A, G, vdo_features[1000*index:], img_features)
+#     vdo2img = []
+#     length = vdo_features.shape[0]
+#     for index in tqdm(range(1+(length-1)//1000)):
+#         if index < length//1000:
+#             scores = verify(A, G, vdo_features[1000*index:1000*(index+1)], img_features)
+#         else:
+#             scores = verify(A, G, vdo_features[1000*index:], img_features)
         
-        argmax = np.argpartition(scores, kth=-k, axis=1)[:, -k:]
+#         argmax = np.argpartition(scores, kth=-k, axis=1)[:, -k:]
         
-        for i in range(argmax.shape[0]):
-            for am in argmax[i, :]:
-                if scores[i, am] > 0:
-                    vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], scores[i, am], i+1000*index, am])
-    return vdo2img
+#         for i in range(argmax.shape[0]):
+#             for am in argmax[i, :]:
+#                 if scores[i, am] > 0:
+#                     vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], scores[i, am], i+1000*index, am])
+#     return vdo2img
 
 def createVdo2Img(imgs, vdos, k, opt_a):
     vdo2img = []
@@ -167,7 +168,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
 
     rates = []
     backbones = []
-    for network, num_layers, r in config_list:
+    for network, num_layers, r, add_info in config_list:
         opt_a.network = network
         opt_a.num_layers_c = num_layers
         opt_a.num_layers_r = num_layers
@@ -198,7 +199,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
         else:
             raise RuntimeError('Cannot Find the Model: {}'.format(opt_a.network))
 
-        backbone.load_state_dict(torch.load(os.path.join(opt_a.saved_path, b_name+'.pth')))
+        backbone.load_state_dict(torch.load(os.path.join(opt_a.saved_path, b_name+'.pth'+add_info)))
         backbone.cuda()
         backbone.eval()
 
@@ -206,6 +207,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
 
     dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
     dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
+    print((opt_a.size, opt_a.size))
 
     print('creating features...')
     img_features_list, img_boxes, img_IDs, img_frames, img_classes = pre_bockbone(dataset_det_img, backbones, opt_a)
@@ -250,6 +252,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
         argmax = np.argpartition(cos, kth=-k, axis=1)[:, -k:]
         
         for i in range(argmax.shape[0]):
+            max_cos = max(cos[i, argmax[i, :]])
             for am in argmax[i, :]:
                 if cos[i, am] > 0:
                     vdo2img.append([vdo_IDs[i+1000*index], img_IDs[am], cos[i, am], i+1000*index, am])
@@ -257,7 +260,7 @@ def createVdo2Img(imgs, vdos, k, opt_a):
     return vdo2img, img_features_list, vdo_features_list, img_boxes[:length_i], vdo_boxes[:length_v], img_IDs[:length_i], vdo_IDs[:length_v], img_frames[:length_i], vdo_frames[:length_v], img_classes[:length_i], vdo_classes[:length_v]
 
 def test(opt_a, opt_e):
-    k = 2
+    k = 5
     cls_k = 3
     calAREA = None
     
@@ -301,52 +304,7 @@ def test(opt_a, opt_e):
     length_i = len(img_boxes)
     length_v = len(vdo_boxes)
 
-    # if opt_a.network == 'resnet':
-    #     backbone = ResNet(opt_a)
-    #     b_name = opt_a.network+'_'+opt_a.mode+'_{}'.format(opt_a.num_layers_r)
-    # elif opt_a.network == 'googlenet':
-    #     backbone = GoogLeNet(opt_a)
-    #     b_name = opt_a.network
-    # elif opt_a.network == 'inceptionv4':
-    #     backbone = InceptionV4(opt_a)
-    #     b_name = opt_a.network
-    # elif opt_a.network == 'inceptionresnetv2':
-    #     backbone = InceptionResNetV2(opt_a)
-    #     b_name = opt_a.network
-    # elif opt_a.network == 'densenet':
-    #     backbone = DenseNet(opt_a)
-    #     b_name = opt_a.network+'_{}'.format(opt_a.num_layers_d)
-    # elif opt_a.network == 'resnet_cbam':
-    #     backbone = ResNetCBAM(opt_a)
-    #     b_name = opt_a.network+'_{}'.format(opt_a.num_layers_c)
-    # else:
-    #     raise RuntimeError('Cannot Find the Model: {}'.format(opt_a.network))
-
-    # backbone.load_state_dict(torch.load(os.path.join(opt_a.saved_path, b_name+'.pth')))
-    # backbone.cuda()
-    # backbone.eval()
-
-    # dataset_det_img = TestDataset(opt_a.data_path, imgs, (opt_a.size, opt_a.size), mode='image')
-    # dataset_det_vdo = TestDataset(opt_a.data_path, vdos, (opt_a.size, opt_a.size), mode='video')
-
-    # print('creating features...')
-    # img_features, img_boxes, img_IDs, img_frames, img_classes = pre_bockbone(dataset_det_img, backbone, opt_a)
-    # vdo_features, vdo_boxes, vdo_IDs, vdo_frames, vdo_classes = pre_bockbone(dataset_det_vdo, backbone, opt_a)
-
-    # assert len(set([
-    #     len(img_features), 
-    #     len(img_boxes), 
-    #     len(img_IDs), 
-    #     len(img_frames), 
-    #     len(img_classes)]))==1
-    # assert len(set([
-    #     len(vdo_features), 
-    #     len(vdo_boxes), 
-    #     len(vdo_IDs), 
-    #     len(vdo_frames), 
-    #     len(vdo_classes)]))==1
-
-    # vdo2img = cal_cosine_similarity(vdo_features, img_features, vdo_IDs, img_IDs, k)
+    C = [0, 1, 2, 3, 3, 2, 3, 2, 3, 3, 4, 0, 2, 2, 2, 2, 0, 1, 0, 2, 3, 3, 2]
 
     vdo2img_d = {}
     print('merging videos...')
@@ -357,6 +315,8 @@ def test(opt_a, opt_e):
             img_index = l[4]
             vdo_cls = vdo_classes[vdo_index]
             img_cls = img_classes[img_index]
+            # if C[int(vdo_cls[0])] != C[int(img_cls[0])]:
+            #     continue
             if len(set(vdo_cls) & set(img_cls)) == 0:
                 continue
         if l[0] not in vdo2img_d:
@@ -371,6 +331,101 @@ def test(opt_a, opt_e):
                 lst[3] = l[4]
             lst[0] += l[2]
             vdo2img_d[l[0]][l[1]] = lst
+
+    k = 1
+    dic = {}
+    out_imgs = set([])
+    vdo2img_d_sorted = {}
+    vdo2img_d_result = {}
+    pre_imgs = set([])
+    for vdo_k in vdo2img_d.keys():
+        score_sum = 1e-8
+        for img_k in vdo2img_d[vdo_k]:
+            score_sum += vdo2img_d[vdo_k][img_k][0]
+        for img_k in vdo2img_d[vdo_k]:
+            vdo2img_d[vdo_k][img_k][0] /= score_sum
+        vdo2img_d_sorted[vdo_k] = sorted(vdo2img_d[vdo_k].items(), key=lambda x:x[1][0], reverse=True)
+        vdo2img_d_result[vdo_k] = vdo2img_d_sorted[vdo_k][0]
+        img_k = vdo2img_d_sorted[vdo_k][0][0]
+        if img_k not in dic:
+            d = {}
+            d['img_index'] = vdo2img_d_sorted[vdo_k][0][1][3]
+            d['vdos'] = []
+            dic[img_k] = d
+        d = {}
+        d['vdo_id'] = vdo_k
+        d['vdo_index'] = vdo2img_d_sorted[vdo_k][0][1][2]
+        d['score'] = vdo2img_d_sorted[vdo_k][0][1][0]
+        dic[img_k]['vdos'].append(d)
+        if len(dic[img_k]['vdos']) >= k:
+            out_imgs.add(img_k)
+        pre_imgs.add(img_k)
+    
+    print('imgs:{}'.format(len(pre_imgs)))
+    
+
+    for _ in range(2):
+        lst = []
+        num = 0
+        num_a = 0
+        for key in dic.keys():
+            lst.append(len(dic[key]['vdos']))
+            if len(dic[key]['vdos']) <= k:
+                continue
+            l = sorted(dic[key]['vdos'], key=lambda x:x['score'], reverse=True)
+            max_s = l[0]['score']
+            l = l[k:]
+            for d in l:
+                if d['score'] > max_s-0.01:
+                    continue
+                vdo_k = d['vdo_id']
+                img_k = key
+                flag = False
+                for index, item in enumerate(vdo2img_d_sorted[vdo_k]):
+                    if item[0] == vdo2img_d_result[vdo_k][0]:
+                        continue
+                    if item[0] in out_imgs:
+                        if item[0] in dic.keys():
+                            max_score = sorted(dic[item[0]]['vdos'], key=lambda x:x['score'], reverse=True)[0]['score']
+                            if item[1][0] < max_score-0.01:
+                                continue
+                    pre_imgs.add(item[0])
+                    vdo2img_d_result[vdo_k] = item
+                    flag = True
+                    break
+                if flag == True:
+                    vdo2img_d_sorted[vdo_k] = vdo2img_d_sorted[vdo_k][index:]
+                num_a += 1
+                if flag == False:
+                    num += 1
+            
+        print(num_a, num)
+
+        print('imgs:{}'.format(len(pre_imgs)))
+        print(max(lst), min(lst))
+        print(Counter(lst))
+
+        dic = {}
+        count_dic = {}
+        for key in vdo2img_d_result.keys():
+            item = vdo2img_d_result[key]
+            if item[0] not in count_dic:
+                count_dic[item[0]] = 0
+            count_dic[item[0]] += 1
+            if item[0] not in dic:
+                d = {}
+                d['img_index'] = item[1][3]
+                d['vdos'] = []
+                dic[item[0]] = d
+            d = {}
+            d['vdo_id'] = key
+            d['vdo_index'] = item[1][2]
+            d['score'] = item[1][0]
+            dic[item[0]]['vdos'].append(d)
+            if len(dic[item[0]]['vdos']) >= k:
+                out_imgs.add(item[0])
+
+        print(Counter(count_dic.values()))
 
     vdo_dic = {}
     for i in range(len(vdo_IDs)):
@@ -388,8 +443,8 @@ def test(opt_a, opt_e):
     
     result = {}
     print('testing...')
-    for k in tqdm(vdo2img_d.keys()):
-        max_pre = sorted(vdo2img_d[k].items(), key=lambda x:x[1][0], reverse=True)[0]
+    for k in tqdm(vdo2img_d_result.keys()):
+        max_pre = vdo2img_d_result[k]
         vdo_id = vdo_IDs[max_pre[1][2]]
         img_id = img_IDs[max_pre[1][3]]
         frame_index = vdo_frames[max_pre[1][2]]
@@ -414,44 +469,33 @@ def test(opt_a, opt_e):
             # cos_ = cosine_similarity(vdo_f, img_f)
             # cos += np.max((cos_[:len(vdo_index), :len(img_index)], cos_[:len(vdo_index), len(img_index):], cos_[len(vdo_index):, :len(img_index)], cos_[len(vdo_index):, len(img_index):]), axis=0)
             cos += cosine_similarity(vdo_f, img_f)
-        max_sim = -np.inf
-        max_img_i = None
-        max_vdo_i = None
+        # max_sim = -np.inf
+        # max_img_i = []
+        # max_vdo_i = []
+        max_i = []
         for i, index in enumerate(vdo_index):
             simis = [cos[i, j] for j in range(len(img_index))]
             # simis_i = np.argmax(simis)
             simis_is = np.argsort(-np.array(simis))
             for simis_i in simis_is:
-                if simis[simis_i] < max_sim:
-                    break
                 img_c = img_classes[img_index[simis_i]]
                 vdo_c = vdo_classes[index]
                 if len(set(vdo_c) & set(img_c)) == 0:
                     continue
-                max_sim = simis[simis_i]
-                max_img_i = img_index[simis_i]
-                max_vdo_i = index
-                break
-            # if simis[simis_i] > max_sim:
-            #     max_sim = simis[simis_i]
-            #     max_img_i = img_index[simis_i]
-            #     max_vdo_i = index
-            # simis_is = np.argsort(-np.array(simis))[:3]
-            # for simis_i in simis_is:
-            #     if simis[simis_i] < 0.2:
-            #         break
-            #     img_i = img_index[simis_i]
-            #     d = {}
-            #     d['img_name'] = img_frames[img_i]
-            #     d['item_box'] = list(map(int, img_boxes[img_i].tolist()))
-            #     d['frame_box'] = list(map(int, vdo_boxes[index].tolist()))
-            #     result[vdo_id]['result'].append(d)
-        if max_img_i is not None:
-            d = {}
-            d['img_name'] = img_frames[max_img_i]
-            d['item_box'] = list(map(int, img_boxes[max_img_i].tolist()))
-            d['frame_box'] = list(map(int, vdo_boxes[max_vdo_i].tolist()))
-            result[vdo_id]['result'].append(d)
+                max_i.append((simis[simis_i], img_index[simis_i], index))
+        if len(max_i) > 0:
+            max_i = sorted(max_i, key=lambda x:x[0], reverse=True)
+            max_sim = max_i[0][0]
+            if max_sim > 0.33 * len(img_features_list):
+                for sim, max_img_i, max_vdo_i in max_i:
+                    if sim > max_sim - 0.15 * len(img_features_list):
+                        d = {}
+                        d['img_name'] = img_frames[max_img_i]
+                        d['item_box'] = list(map(int, img_boxes[max_img_i].tolist()))
+                        d['frame_box'] = list(map(int, vdo_boxes[max_vdo_i].tolist()))
+                        result[vdo_id]['result'].append(d)
+                    else:
+                        break
 
         if len(result[vdo_id]['result']) == 0:
             del result[vdo_id]

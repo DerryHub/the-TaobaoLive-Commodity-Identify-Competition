@@ -51,8 +51,8 @@ def get_args_efficientdet():
 
 def get_args_arcface():
     parser = argparse.ArgumentParser("ArcFace")
-    parser.add_argument("--size", type=int, default=224, help="The common width and height for all images")
-    parser.add_argument("--batch_size", type=int, default=512, help="The number of images per batch")
+    parser.add_argument("--size", type=int, default=256, help="The common width and height for all images")
+    parser.add_argument("--batch_size", type=int, default=256, help="The number of images per batch")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--data_path", type=str, default="tcdata/test_dataset_fs", help="the root folder of dataset")
@@ -70,7 +70,7 @@ def get_args_arcface():
                         help="[resnest, resnet, googlenet, inceptionv4, inceptionresnetv2, resnet_cbam]")
 
     parser.add_argument("--validation_config", type=list,
-                        default=[('resnest', 50, 0.8),('resnest', 101, 1),('resnet_cbam', 101, 0.8)])
+                        default=[('resnest', 50, 1, ''), ('resnest', 101, 1.3, ''), ('resnet_cbam', 101, 1, '')])
 
     # resnest config
     parser.add_argument("--num_layers_s", type=int, default=50, help="[50, 101]")

@@ -313,20 +313,28 @@ class TestDataset(Dataset):
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
             ret, img = cap.read()
             cap.release()
-        det = img[ymin:ymax, xmin:xmax, :]
+        
+        h, w, c = img.shape
+        dy = int((ymax-ymin)*0.05)
+        dx = int((xmax-xmin)*0.05)
+        ymin_n = max(0, ymin-dy)
+        ymax_n = min(h, ymax+dy)
+        xmin_n = max(0, xmin-dx)
+        xmax_n = min(w, xmax+dx)
+
+        det = img[ymin_n:ymax_n, xmin_n:xmax_n, :]
         if index >= self.length:
             det = det[:, ::-1, :].copy()
         det = cv2.resize(det, self.size)
+
         det = cv2.cvtColor(det, cv2.COLOR_BGR2RGB)
         det = det.astype(np.float32) / 255
-
         det = torch.from_numpy(det)
         det = det.permute(2, 0, 1)
-
         det = self.transform(det)
 
         return {
-            'img': det, 
+            'img': det,
             'imgID': imgID, 
             'frame': frame, 
             'box': np.array([xmin, ymin, xmax, ymax]),
