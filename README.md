@@ -4,7 +4,7 @@
 
 # Document
 
-[The Technical Document (CN-zh)](./document/The Technical Document.md)
+[The Technical Document (CN-zh)](./document/The_Technical_Document.md)
 
 # Object Detection
 
