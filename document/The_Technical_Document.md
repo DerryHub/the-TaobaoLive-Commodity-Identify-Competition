@@ -314,7 +314,7 @@ python3.7和pytorch1.4运行。下面将详细介绍两阶段的方案。
 
 ### 目标检测阶段
 
-![image-20200607135322137](image\image-20200607135322137.png)
+![image-20200607135322137](image/image-20200607135322137.png)
 
 **目标检测阶段核心代码taobao/docker/test.py**
 
@@ -362,7 +362,7 @@ def pre_efficient(dataset, model, opt_e, cls_k, ins_f=True, calAREA=None):
 
 ### 匹配阶段
 
-![image-20200607144436563](image\image-20200607144436563.png)
+![image-20200607144436563](image/image-20200607144436563.png)
 
 **匹配阶段核心代码taobao/docker/test.py**
 
