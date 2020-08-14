@@ -1,4 +1,13 @@
+# Introduce
+
+**This is our team's source code of [the TaobaoLive Commodity Identify Competition of Tianchi Big Data Platform](https://tianchi.aliyun.com/competition/entrance/231772/introduction). Our team PAI got the sixth place in this competition.**
+
+# Document
+
+[The Technical Document (CN-zh)](document/The Technical Document.md)
+
 # Object Detection
+
 ## Configuration File
 ```python
 from config import get_args_efficientdet
