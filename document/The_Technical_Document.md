@@ -2,7 +2,7 @@
 
 我们队伍采用的是两阶段方案：目标检测+匹配。
 
-其中，目标检测阶段使用的原型是effiffifficientdet，匹配阶段使用的原型是arcface。代码可基于
+其中，目标检测阶段使用的原型是efficientdet，匹配阶段使用的原型是arcface。代码可基于
 
 python3.7和pytorch1.4运行。下面将详细介绍两阶段的方案。
 
